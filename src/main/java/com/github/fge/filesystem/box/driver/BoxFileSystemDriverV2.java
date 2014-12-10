@@ -21,6 +21,7 @@ import java.io.PipedOutputStream;
 import java.net.URI;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileStore;
@@ -46,6 +47,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+//TODO: optimize by first looking up the parent where possible
 @SuppressWarnings("OverloadedVarargsMethod")
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemDriverV2
@@ -292,7 +294,33 @@ public final class BoxFileSystemDriverV2
     public void delete(final Path path)
         throws IOException
     {
+        final Path realPath = path.toRealPath();
+        final String target = realPath.toString();
+        final BoxItem.Info info = lookupPath(realPath);
 
+        if (info == null)
+            throw new NoSuchFileException(target);
+
+        if (BoxType.getType(info) == BoxType.DIRECTORY) {
+            final BoxFolder dir = (BoxFolder) info.getResource();
+            // TODO: check what the API would return if dir non empty
+            if (!directoryIsEmpty(dir))
+                throw new DirectoryNotEmptyException(target);
+            try {
+                dir.delete(false);
+                return;
+            } catch (BoxAPIException e) {
+                throw BoxIOException.wrap(e);
+            }
+        }
+
+        // Not a directory, then a file
+        final BoxFile file = (BoxFile) info.getResource();
+        try {
+            file.delete();
+        } catch (BoxAPIException e) {
+            throw BoxIOException.wrap(e);
+        }
     }
 
     /**
@@ -481,11 +509,13 @@ public final class BoxFileSystemDriverV2
         return count == nameCount ? info : null;
     }
 
-    @Nonnull
-    private static <T> Set<T> toSet(final T... options)
+    private boolean directoryIsEmpty(final BoxFolder directory)
+        throws BoxIOException
     {
-        final Set<T> set = new HashSet<>();
-        Collections.addAll(set, options);
-        return set;
+        try {
+            return directory.iterator().hasNext();
+        } catch (BoxAPIException e) {
+            throw BoxIOException.wrap(e);
+        }
     }
 }
