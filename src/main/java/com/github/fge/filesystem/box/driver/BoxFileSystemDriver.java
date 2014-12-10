@@ -7,6 +7,7 @@ import com.box.boxjavalibv2.dao.BoxItem;
 import com.box.boxjavalibv2.dao.BoxResourceType;
 import com.box.boxjavalibv2.dao.BoxTypedObject;
 import com.box.boxjavalibv2.exceptions.AuthFatalFailureException;
+import com.box.boxjavalibv2.exceptions.BoxJSONException;
 import com.box.boxjavalibv2.exceptions.BoxServerException;
 import com.box.boxjavalibv2.requests.requestobjects.BoxFolderDeleteRequestObject;
 import com.box.boxjavalibv2.requests.requestobjects.BoxFolderRequestObject;
@@ -18,16 +19,22 @@ import com.box.boxjavalibv2.resourcemanagers.IBoxFoldersManager;
 import com.box.boxjavalibv2.resourcemanagers.IBoxItemsManager;
 import com.box.restclientv2.exceptions.BoxRestException;
 import com.box.restclientv2.requestsbase.BoxDefaultRequestObject;
+import com.box.restclientv2.requestsbase.BoxFileUploadRequestObject;
+import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.filestore.BoxFileStore;
+import com.github.fge.filesystem.box.io.BoxFileUploadOutputStream;
 import com.github.fge.filesystem.driver.UnixLikeFileSystemDriverBase;
 import com.github.fge.filesystem.exceptions.IsDirectoryException;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
+import javax.annotation.WillCloseWhenClosed;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.net.URI;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
@@ -41,14 +48,22 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @SuppressWarnings("OverloadedVarargsMethod")
 @ParametersAreNonnullByDefault
@@ -57,12 +72,17 @@ public final class BoxFileSystemDriver
 {
     private static final String ROOT_DIR_ID = "0";
     private static final int PAGING_SIZE = 50;
+    // Pipe size for uploads
+    private static final int PIPE_SIZE = 16384;
 
     private final BoxClient client;
 
     private final IBoxFoldersManager dirManager;
     private final IBoxFilesManager fileManager;
     private final IBoxItemsManager itemManager;
+
+    // TODO: rename threads
+    private final ExecutorService executor = Executors.newCachedThreadPool();
 
     public BoxFileSystemDriver(final URI uri, final BoxClient client)
     {
@@ -121,23 +141,74 @@ public final class BoxFileSystemDriver
      * @throws IOException filesystem level error, or plain I/O error
      * @see FileSystemProvider#newOutputStream(Path, OpenOption...)
      */
+    @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
     @Nonnull
     @Override
     public OutputStream newOutputStream(final Path path,
         final OpenOption... options)
         throws IOException
     {
-        final BoxItem item = lookupPath(path.toRealPath());
+        final Set<OpenOption> set = new HashSet<>();
+        Collections.addAll(set, options);
 
-        if (item == null)
-            throw new NoSuchFileException(path.toString());
+        // TODO: check
+        if (set.contains(StandardOpenOption.APPEND))
+            throw new UnsupportedOperationException();
+        if (set.contains(StandardOpenOption.DELETE_ON_CLOSE))
+            throw new UnsupportedOperationException();
 
-        if (!"file".equals(item.getType()))
-            throw new IsDirectoryException(path.toString());
+        final Path realPath = path.toRealPath();
+        if (set.contains(StandardOpenOption.CREATE_NEW)
+            && lookupPath(realPath) != null)
+            throw new FileAlreadyExistsException(realPath.toString());
 
-        // TODO: check that it is not altered
-        final BoxDefaultRequestObject req = new BoxDefaultRequestObject();
-        return null;
+        final Path parent = realPath.getParent();
+        @SuppressWarnings("ConstantConditions")
+        final String parentId = parent == null ? ROOT_DIR_ID
+            : lookupPath(parent).getId();
+
+        final String name = realPath.getFileName().toString();
+
+        @WillCloseWhenClosed
+        final PipedInputStream in = new PipedInputStream(16384);
+        final BoxFileUploadRequestObject req;
+
+        try {
+            req = BoxFileUploadRequestObject
+                .uploadFileRequestObject(parentId, name, in);
+        } catch (BoxRestException | BoxJSONException e) {
+            try {
+                in.close();
+            } catch (IOException e2) {
+                e.addSuppressed(e2);
+            }
+            throw new BoxIOException("API problem", e);
+        }
+
+        final Future<BoxItem> future = executor.submit(new Callable<BoxItem>()
+        {
+            @Override
+            public BoxItem call()
+                throws BoxIOException
+            {
+                try {
+                    return fileManager.uploadFile(req);
+                } catch (BoxRestException e) {
+                    throw new BoxIOException("API problem", e);
+                } catch (BoxServerException e) {
+                    throw new BoxIOException("server problem", e);
+                } catch (AuthFatalFailureException e) {
+                    throw new BoxIOException("authentication problem", e);
+                } catch (InterruptedException e) {
+                    throw new BoxIOException("interrupted!", e);
+                }
+            }
+        });
+
+        @WillCloseWhenClosed
+        final PipedOutputStream out = new PipedOutputStream(in);
+
+        return new BoxFileUploadOutputStream(future, out);
     }
 
     /**
