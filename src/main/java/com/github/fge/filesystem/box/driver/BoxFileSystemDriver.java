@@ -8,6 +8,9 @@ import com.box.boxjavalibv2.dao.BoxResourceType;
 import com.box.boxjavalibv2.dao.BoxTypedObject;
 import com.box.boxjavalibv2.exceptions.AuthFatalFailureException;
 import com.box.boxjavalibv2.exceptions.BoxServerException;
+import com.box.boxjavalibv2.requests.requestobjects.BoxFolderDeleteRequestObject;
+import com.box.boxjavalibv2.requests.requestobjects.BoxFolderRequestObject;
+import com.box.boxjavalibv2.requests.requestobjects.BoxItemCopyRequestObject;
 import com.box.boxjavalibv2.requests.requestobjects.BoxPagingRequestObject;
 import com.box.boxjavalibv2.requests.requestobjects.BoxRequestExtras;
 import com.box.boxjavalibv2.resourcemanagers.IBoxFilesManager;
@@ -26,13 +29,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
@@ -83,6 +91,9 @@ public final class BoxFileSystemDriver
     {
         final BoxItem item = lookupPath(path.toRealPath());
 
+        if (item == null)
+            throw new NoSuchFileException(path.toString());
+
         if (!"file".equals(item.getType()))
             throw new IsDirectoryException(path.toString());
 
@@ -118,6 +129,9 @@ public final class BoxFileSystemDriver
     {
         final BoxItem item = lookupPath(path.toRealPath());
 
+        if (item == null)
+            throw new NoSuchFileException(path.toString());
+
         if (!"file".equals(item.getType()))
             throw new IsDirectoryException(path.toString());
 
@@ -151,13 +165,47 @@ public final class BoxFileSystemDriver
      * @param dir the directory to create
      * @param attrs the attributes with which the directory should be created
      * @throws IOException filesystem level error, or a plain I/O error
-     * @see FileSystemProvider#newDirectoryStream(Path, DirectoryStream.Filter)
+     * @see FileSystemProvider#createDirectory(Path, FileAttribute[])
      */
     @Override
     public void createDirectory(final Path dir, final FileAttribute<?>... attrs)
         throws IOException
     {
+        final Path path = dir.toRealPath();
+        final Path parent = path.getParent();
 
+        // Trying to create the root directory. Meh.
+        if (parent == null)
+            throw new FileAlreadyExistsException(dir.toString());
+
+        final BoxItem item = lookupPath(parent);
+
+        // Parent does not exist
+        if (item == null)
+            throw new NoSuchFileException(parent.toString());
+
+        final String name = dir.getFileName().toString();
+
+        // Already exists...
+        //noinspection VariableNotUsedInsideIf
+        // TODO: probably better to send the request directly and handle errors
+        if (findItemInCollection(item.getId(), name) != null)
+            throw new FileAlreadyExistsException(dir.toString());
+
+        final BoxFolderRequestObject req = new BoxFolderRequestObject();
+        req.setName(name);
+        req.setParent(item.getId());
+
+        try {
+            dirManager.createFolder(req);
+        } catch (BoxRestException e) {
+            // TODO: detect nonexistence and throw NoSuchFileException
+            throw new IOException("API error", e);
+        } catch (BoxServerException e) {
+            throw new IOException("Box server error", e);
+        } catch (AuthFatalFailureException e) {
+            throw new IOException("Authentication failure", e);
+        }
     }
 
     /**
@@ -171,7 +219,32 @@ public final class BoxFileSystemDriver
     public void delete(final Path path)
         throws IOException
     {
+        final BoxItem item = lookupPath(path.toRealPath());
 
+        if (item == null)
+            throw new NoSuchFileException(path.toString());
+
+        final boolean isDir = "folder".equals(item.getType());
+
+        // TODO: check whether we can rely on the API for that
+        if (isDir && !dirIsEmpty(item.getId()))
+            throw new DirectoryNotEmptyException(path.toString());
+
+        final String id = item.getId();
+        try {
+            if (isDir)
+                dirManager.deleteFolder(id, BoxFolderDeleteRequestObject
+                    .deleteFolderRequestObject(false));
+            else
+                fileManager.deleteFile(item.getId(), getDefaultRequest());
+        } catch (BoxRestException e) {
+            // TODO: detect nonexistence and throw NoSuchFileException
+            throw new IOException("API error", e);
+        } catch (BoxServerException e) {
+            throw new IOException("Box server error", e);
+        } catch (AuthFatalFailureException e) {
+            throw new IOException("Authentication failure", e);
+        }
     }
 
     /**
@@ -189,7 +262,48 @@ public final class BoxFileSystemDriver
         final CopyOption... options)
         throws IOException
     {
+        final Path srcPath = source.toRealPath();
+        final Path dstPath = target.toRealPath();
 
+        final BoxItem srcItem = lookupPath(srcPath);
+
+        if (srcItem == null)
+            throw new NoSuchFileException(srcPath.toString());
+
+
+        boolean overwrite = false;
+
+        for (final CopyOption option: options)
+            if (option.equals(StandardCopyOption.REPLACE_EXISTING))
+                overwrite = true;
+
+        final BoxItem dstItem = lookupPath(dstPath);
+
+        //noinspection VariableNotUsedInsideIf
+        if (dstItem != null) {
+            if (!overwrite)
+                throw new FileAlreadyExistsException(dstPath.toString());
+            delete(dstPath);
+        }
+
+        final Path parent = dstPath.getParent();
+        @SuppressWarnings("ConstantConditions")
+        final String parentId = parent == null ? ROOT_DIR_ID
+            : lookupPath(parent).getId();
+
+        final BoxItemCopyRequestObject req
+            = BoxItemCopyRequestObject.copyItemRequestObject(parentId);
+        req.setName(target.getFileName().toString());
+
+        try {
+            fileManager.copyFile(srcItem.getId(), req);
+        } catch (BoxRestException e) {
+            throw new IOException("API error", e);
+        } catch (BoxServerException e) {
+            throw new IOException("Box server error", e);
+        } catch (AuthFatalFailureException e) {
+            throw new IOException("Authentication failure", e);
+        }
     }
 
     /**
@@ -224,7 +338,19 @@ public final class BoxFileSystemDriver
     public void checkAccess(final Path path, final AccessMode... modes)
         throws IOException
     {
+        final BoxItem item = lookupPath(path.toRealPath());
 
+        final String toString = path.toString();
+
+        if (item == null)
+            throw new NoSuchFileException(toString);
+
+        if (!"folder".equals(item.getType()))
+            return;
+
+        for (final AccessMode mode: modes)
+            if (mode == AccessMode.EXECUTE)
+                throw new AccessDeniedException(toString);
     }
 
     /**
@@ -334,8 +460,7 @@ public final class BoxFileSystemDriver
         if (!path.isAbsolute())
             throw new IllegalStateException("path not absolute, cannot lookup");
 
-        String id = ROOT_DIR_ID;
-        BoxItem item = lookupFolder(id);
+        BoxItem item = lookupFolder(ROOT_DIR_ID);
 
         final int nameCount = path.getNameCount();
 
@@ -350,15 +475,23 @@ public final class BoxFileSystemDriver
         String name;
         while (!names.isEmpty() && "folder".equals(item.getType())) {
             name = names.remove(0);
-            item = findItemInCollection(id, name);
+            item = findItemInCollection(item.getId(), name);
             if (item == null)
                 break;
-            id = item.getId();
         }
 
-        return item;
+        return names.isEmpty() ? item : null;
     }
 
+    /**
+     * Find one item by name which is either a file or a directory in a
+     * directory
+     *
+     * @param id the id of the directory (always exists)
+     * @param name the name to find
+     * @return the item; {@code null} if not found
+     * @throws IOException API problem, or I/O error
+     */
     @Nullable
     private BoxItem findItemInCollection(final String id, final String name)
         throws IOException
@@ -374,6 +507,7 @@ public final class BoxFileSystemDriver
                 index);
             index += PAGING_SIZE;
             try {
+                // TODO: detect nonexistence and throw NoSuchFileException
                 collection = dirManager.getFolderItems(id, req);
             } catch (BoxRestException e) {
                 throw new IOException("API error", e);
@@ -397,23 +531,22 @@ public final class BoxFileSystemDriver
         return null;
     }
 
+    /**
+     * Lookup an item by id
+     *
+     * @param id the id (always exists)
+     * @return the item
+     * @throws IOException API problem, or I/O error
+     */
+    @Nonnull
     private BoxItem lookupItem(final String id)
         throws IOException
     {
-        final IBoxItemsManager manager = client.getBoxItemsManager();
-
-        final BoxDefaultRequestObject req
-            = new BoxDefaultRequestObject();
-        final BoxRequestExtras extras = req.getRequestExtras();
-
-        extras.addField(BoxItem.FIELD_NAME);
-        extras.addField(BoxTypedObject.FIELD_TYPE);
-        extras.addField(BoxItem.FIELD_SIZE);
-        extras.addField(BoxTypedObject.FIELD_MODIFIED_AT);
-        extras.addField(BoxTypedObject.FIELD_CREATED_AT);
+        final BoxDefaultRequestObject req = getDefaultRequest();
 
         try {
-            return manager.getItem(id, req, BoxResourceType.ITEM);
+            // TODO: detect nonexistence and throw NoSuchFileException
+            return itemManager.getItem(id, req, BoxResourceType.ITEM);
         } catch (BoxRestException e) {
             throw new IOException("API error", e);
         } catch (BoxServerException e) {
@@ -423,10 +556,68 @@ public final class BoxFileSystemDriver
         }
     }
 
+    /**
+     * Lookup a folder by id
+     *
+     * @param id the id of the folder (always exists)
+     * @return the folder item
+     * @throws IOException API problem, or I/O error
+     */
     private BoxFolder lookupFolder(final String id)
         throws IOException
     {
-        final IBoxFoldersManager manager = client.getFoldersManager();
+        final BoxDefaultRequestObject req = getDefaultRequest();
+
+        try {
+            // TODO: detect nonexistence and throw NoSuchFileException
+            return dirManager.getFolder(id, req);
+        } catch (BoxRestException e) {
+            throw new IOException("API error", e);
+        } catch (BoxServerException e) {
+            throw new IOException("Box server error", e);
+        } catch (AuthFatalFailureException e) {
+            throw new IOException("Authentication failure", e);
+        }
+    }
+
+    /**
+     * Tell whether a folder is empty of not
+     *
+     * @param id the id of the folder (always exists)
+     * @return true if the directory has no entries
+     * @throws IOException API problem, or I/O error
+     */
+    private boolean dirIsEmpty(final String id)
+        throws IOException
+    {
+        final BoxPagingRequestObject req
+            = BoxPagingRequestObject.pagingRequestObject(5, 0);
+
+        try {
+            final BoxCollection items = dirManager.getFolderItems(id, req);
+            return items.getTotalCount() != 0;
+        } catch (BoxRestException e) {
+            // TODO: detect nonexistence and throw NoSuchFileException
+            throw new IOException("API error", e);
+        } catch (BoxServerException e) {
+            throw new IOException("Box server error", e);
+        } catch (AuthFatalFailureException e) {
+            throw new IOException("Authentication failure", e);
+        }
+    }
+
+    /**
+     * Return a standard default request
+     *
+     * <p>This request contains the necessary information to fill a {@link
+     * BasicFileAttributes}.</p>
+     *
+     * @return a standard request
+     */
+    // TODO: make it a constant if request not modified by the code
+    @Nonnull
+    private static BoxDefaultRequestObject getDefaultRequest()
+    {
         final BoxDefaultRequestObject req
             = new BoxDefaultRequestObject();
         final BoxRequestExtras extras = req.getRequestExtras();
@@ -436,15 +627,6 @@ public final class BoxFileSystemDriver
         extras.addField(BoxItem.FIELD_SIZE);
         extras.addField(BoxTypedObject.FIELD_MODIFIED_AT);
         extras.addField(BoxTypedObject.FIELD_CREATED_AT);
-
-        try {
-            return manager.getFolder(id, req);
-        } catch (BoxRestException e) {
-            throw new IOException("API error", e);
-        } catch (BoxServerException e) {
-            throw new IOException("Box server error", e);
-        } catch (AuthFatalFailureException e) {
-            throw new IOException("Authentication failure", e);
-        }
+        return req;
     }
 }
