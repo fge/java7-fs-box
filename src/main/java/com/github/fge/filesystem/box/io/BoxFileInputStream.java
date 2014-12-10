@@ -31,16 +31,18 @@ public final class BoxFileInputStream
     extends InputStream
 {
     private final Future<Void> future;
+    private final PipedOutputStream out;
     private final PipedInputStream in;
 
-    public BoxFileInputStream(final Future<Void> future)
+    public BoxFileInputStream(final Future<Void> future,
+        final PipedOutputStream out)
         throws BoxIOException
     {
         this.future = Objects.requireNonNull(future);
+        this.out = Objects.requireNonNull(out);
         // TODO: make pipe size constant
         in = new PipedInputStream(16384);
 
-        final PipedOutputStream out = new PipedOutputStream();
         try {
             out.connect(in);
         } catch (IOException e) {
