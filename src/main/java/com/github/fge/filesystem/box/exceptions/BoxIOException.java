@@ -1,10 +1,18 @@
 package com.github.fge.filesystem.box.exceptions;
 
+import com.box.sdk.BoxAPIException;
+
+import javax.annotation.Nonnull;
 import java.io.IOException;
 
 public final class BoxIOException
     extends IOException
 {
+    public static BoxIOException wrap(@Nonnull final BoxAPIException e)
+    {
+        return new BoxIOException("Box API error", e);
+    }
+
     /**
      * Constructs an {@code IOException} with {@code null}
      * as its error detail message.
