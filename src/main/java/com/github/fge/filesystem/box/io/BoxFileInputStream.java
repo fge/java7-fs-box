@@ -31,18 +31,16 @@ public final class BoxFileInputStream
     extends InputStream
 {
     private final Future<Void> future;
-    private final PipedOutputStream out;
     private final PipedInputStream in;
 
-    public BoxFileInputStream(final Future<Void> future,
-        final PipedOutputStream out)
+    public BoxFileInputStream(final Future<Void> future)
         throws BoxIOException
     {
         this.future = Objects.requireNonNull(future);
-        this.out = Objects.requireNonNull(out);
-
-        // TODO: make constant
+        // TODO: make pipe size constant
         in = new PipedInputStream(16384);
+
+        final PipedOutputStream out = new PipedOutputStream();
         try {
             out.connect(in);
         } catch (IOException e) {
@@ -50,6 +48,11 @@ public final class BoxFileInputStream
                 in.close();
             } catch (IOException e2) {
                 e.addSuppressed(e2);
+            }
+            try {
+                out.close();
+            } catch (IOException e3) {
+                e.addSuppressed(e3);
             }
             throw new BoxIOException("failed to initialize download", e);
         }
