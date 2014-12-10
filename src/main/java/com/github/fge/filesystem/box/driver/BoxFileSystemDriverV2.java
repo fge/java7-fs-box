@@ -2,10 +2,13 @@ package com.github.fge.filesystem.box.driver;
 
 import com.box.sdk.BoxAPIConnection;
 import com.box.sdk.BoxAPIException;
+import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
+import com.github.fge.filesystem.box.io.BoxFileInputStream;
 import com.github.fge.filesystem.driver.UnixLikeFileSystemDriverBase;
+import com.github.fge.filesystem.exceptions.IsDirectoryException;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -13,6 +16,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PipedOutputStream;
 import java.net.URI;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
@@ -20,6 +24,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -28,11 +33,17 @@ import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemDriverV2
     extends UnixLikeFileSystemDriverBase
 {
+    private final ExecutorService executor = Executors.newCachedThreadPool();
+
     private final BoxAPIConnection api;
     private final BoxFolder rootFolder;
 
@@ -60,7 +71,37 @@ public final class BoxFileSystemDriverV2
         final OpenOption... options)
         throws IOException
     {
-        return null;
+        final Path realPath = path.toRealPath();
+        final String target = realPath.toString();
+
+        final BoxItem.Info info = lookupPath(realPath);
+
+        if (info == null)
+            throw new NoSuchFileException(target);
+
+        if (BoxType.getType(info) == BoxType.DIRECTORY)
+            throw new IsDirectoryException(target);
+
+        final BoxFile file = (BoxFile) info.getResource();
+
+        final PipedOutputStream out = new PipedOutputStream();
+
+        final Future<Void> future = executor.submit(new Callable<Void>()
+        {
+            @Override
+            public Void call()
+                throws BoxIOException
+            {
+                try {
+                    file.download(out);
+                    return null;
+                } catch (BoxAPIException e) {
+                    throw BoxIOException.wrap(e);
+                }
+            }
+        });
+
+        return new BoxFileInputStream(future, out);
     }
 
     /**
