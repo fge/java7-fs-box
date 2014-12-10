@@ -7,6 +7,7 @@ import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.io.BoxFileInputStream;
+import com.github.fge.filesystem.box.io.BoxFileOutputStream;
 import com.github.fge.filesystem.driver.UnixLikeFileSystemDriverBase;
 import com.github.fge.filesystem.exceptions.IsDirectoryException;
 
@@ -21,23 +22,31 @@ import java.net.URI;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.spi.FileSystemProvider;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+@SuppressWarnings("OverloadedVarargsMethod")
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemDriverV2
     extends UnixLikeFileSystemDriverBase
@@ -114,13 +123,49 @@ public final class BoxFileSystemDriverV2
      * @throws IOException filesystem level error, or plain I/O error
      * @see FileSystemProvider#newOutputStream(Path, OpenOption...)
      */
+    @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
     @Nonnull
     @Override
     public OutputStream newOutputStream(final Path path,
         final OpenOption... options)
         throws IOException
     {
-        return null;
+        final Set<OpenOption> set = new HashSet<>();
+        Collections.addAll(set, options);
+
+        if (set.contains(StandardOpenOption.DELETE_ON_CLOSE))
+            throw new UnsupportedOperationException();
+        if (set.contains(StandardOpenOption.APPEND))
+            throw new UnsupportedOperationException();
+
+        final Path realPath = path.toRealPath();
+
+        final OutputStream ret;
+        final String target = realPath.toString();
+        final BoxItem.Info info = lookupPath(realPath);
+        final boolean create = info == null;
+
+        if (!create) {
+            if (set.contains(StandardOpenOption.CREATE_NEW))
+                throw new FileAlreadyExistsException(target);
+            if (BoxType.getType(info) == BoxType.DIRECTORY)
+                throw new IsDirectoryException(target);
+            ret = new BoxFileOutputStream(executor,
+                (BoxFile) info.getResource());
+        } else {
+            if (!set.contains(StandardOpenOption.CREATE))
+                throw new NoSuchFileException(target);
+            // TODO: check; parent should always exist
+            final Path parent = realPath.getParent();
+            final BoxItem.Info parentInfo = lookupPath(parent);
+            if (parentInfo == null)
+                throw new NoSuchFileException(parent.toString());
+            ret = new BoxFileOutputStream(executor,
+                (BoxFolder) parentInfo.getResource(),
+                realPath.getFileName().toString());
+        }
+
+        return ret;
     }
 
     /**
@@ -139,7 +184,66 @@ public final class BoxFileSystemDriverV2
         final DirectoryStream.Filter<? super Path> filter)
         throws IOException
     {
-        return null;
+        final Path realPath = dir.toRealPath();
+        final String target = realPath.toString();
+        final BoxItem.Info info = lookupPath(realPath);
+
+        if (info == null)
+            throw new NoSuchFileException(target);
+        if (BoxType.getType(info) != BoxType.DIRECTORY)
+            throw new NotDirectoryException(target);
+
+        final BoxFolder folder = (BoxFolder) info.getResource();
+
+        final Iterator<BoxItem.Info> children;
+
+        // TODO: check that this call can do that
+        try {
+            children = folder.getChildren().iterator();
+        } catch (BoxAPIException e) {
+            throw BoxIOException.wrap(e);
+        }
+
+        // TODO: context?
+        @SuppressWarnings("AnonymousInnerClassWithTooManyMethods")
+        final Iterator<Path> iterator = new Iterator<Path>()
+        {
+            @Override
+            public boolean hasNext()
+            {
+                return children.hasNext();
+            }
+
+            @Override
+            public Path next()
+            {
+                // Note: relies on children throwing NoSuchElementException
+                final String name = children.next().getName();
+                return dir.resolve(name);
+            }
+
+            @Override
+            public void remove()
+            {
+                throw new UnsupportedOperationException();
+            }
+        };
+
+        return new DirectoryStream<Path>()
+        {
+            @Override
+            public Iterator<Path> iterator()
+            {
+                return iterator;
+            }
+
+            @Override
+            public void close()
+                throws IOException
+            {
+                // TODO: is there anything to do here?
+            }
+        };
     }
 
     /**
@@ -154,7 +258,27 @@ public final class BoxFileSystemDriverV2
     public void createDirectory(final Path dir, final FileAttribute<?>... attrs)
         throws IOException
     {
+        final Path realPath = dir.toRealPath();
+        final BoxItem.Info info = lookupPath(realPath);
 
+        //noinspection VariableNotUsedInsideIf
+        if (info != null)
+            throw new FileAlreadyExistsException(realPath.toString());
+
+        final Path parent = realPath.getParent();
+        final BoxItem.Info parentInfo = lookupPath(parent);
+
+        if (parentInfo == null)
+            throw new NoSuchFileException(parent.toString());
+
+        final BoxFolder folder = (BoxFolder) parentInfo.getResource();
+        final String name = realPath.getFileName().toString();
+
+        try {
+            folder.createFolder(name);
+        } catch (BoxAPIException e) {
+            throw BoxIOException.wrap(e);
+        }
     }
 
     /**
@@ -355,5 +479,13 @@ public final class BoxFileSystemDriverV2
         }
 
         return count == nameCount ? info : null;
+    }
+
+    @Nonnull
+    private static <T> Set<T> toSet(final T... options)
+    {
+        final Set<T> set = new HashSet<>();
+        Collections.addAll(set, options);
+        return set;
     }
 }
