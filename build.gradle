@@ -65,6 +65,7 @@ dependencies {
     compile(group: "com.github.fge", name: "java7-fs-base",
         version: "0.0.1");
     compile(group: "net.box", name: "boxjavalibv2", version: "3.1.7");
+    compile(group: "com.box", name: "box-java-sdk", version: "0.5.0");
     provided(group: "com.google.code.findbugs", name: "jsr305",
         version: "3.0.0");
     testCompile(group: "org.testng", name: "testng", version: "6.8.8") {
@@ -78,7 +79,7 @@ dependencies {
 
 javadoc.options.links("http://docs.oracle.com/javase/7/docs/api/");
 javadoc.options.links("http://jsr-305.googlecode.com/svn/trunk/javadoc/");
-javadoc.options.links("http://dropbox.github.io/dropbox-sdk-java/api-docs/v1.7.x/");
+javadoc.options.links("http://opensource.box.com/box-java-sdk/javadoc/")
 
 /*
  * Necessary! Otherwise TestNG will not be used...
