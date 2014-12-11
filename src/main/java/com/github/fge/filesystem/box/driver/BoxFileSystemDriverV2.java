@@ -1,6 +1,5 @@
 package com.github.fge.filesystem.box.driver;
 
-import com.box.sdk.BoxAPIConnection;
 import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
@@ -19,6 +18,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PipedOutputStream;
 import java.net.URI;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
 import java.nio.file.DirectoryNotEmptyException;
@@ -28,17 +28,20 @@ import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
-import java.nio.file.NotDirectoryException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.spi.FileSystemProvider;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -55,15 +58,13 @@ public final class BoxFileSystemDriverV2
 {
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    private final BoxAPIConnection api;
-    private final BoxFolder rootFolder;
+    private final BoxAPIWrapper wrapper;
 
     public BoxFileSystemDriverV2(final URI uri, final FileStore fileStore,
-        final BoxAPIConnection api, final BoxFolder rootFolder)
+        final BoxAPIWrapper wrapper)
     {
         super(uri, fileStore);
-        this.api = Objects.requireNonNull(api);
-        this.rootFolder = Objects.requireNonNull(rootFolder);
+        this.wrapper = Objects.requireNonNull(wrapper);
     }
 
     /**
@@ -83,17 +84,8 @@ public final class BoxFileSystemDriverV2
         throws IOException
     {
         final Path realPath = path.toRealPath();
-        final String target = realPath.toString();
 
-        final BoxItem.Info info = lookupPath(realPath);
-
-        if (info == null)
-            throw new NoSuchFileException(target);
-
-        if (BoxType.getType(info) == BoxType.DIRECTORY)
-            throw new IsDirectoryException(target);
-
-        final BoxFile file = (BoxFile) info.getResource();
+        final BoxFile file = wrapper.getFile(realPath);
 
         final PipedOutputStream out = new PipedOutputStream();
 
@@ -144,27 +136,23 @@ public final class BoxFileSystemDriverV2
 
         final OutputStream ret;
         final String target = realPath.toString();
-        final BoxItem.Info info = lookupPath(realPath);
-        final boolean create = info == null;
+        final BoxItem item = wrapper.getItem(realPath);
+        final boolean create = item == null;
 
-        if (!create) {
-            if (set.contains(StandardOpenOption.CREATE_NEW))
-                throw new FileAlreadyExistsException(target);
-            if (BoxType.getType(info) == BoxType.DIRECTORY)
-                throw new IsDirectoryException(target);
-            ret = new BoxFileOutputStream(executor,
-                (BoxFile) info.getResource());
-        } else {
+        if (create) {
             if (!set.contains(StandardOpenOption.CREATE))
                 throw new NoSuchFileException(target);
             // TODO: check; parent should always exist
             final Path parent = realPath.getParent();
-            final BoxItem.Info parentInfo = lookupPath(parent);
-            if (parentInfo == null)
-                throw new NoSuchFileException(parent.toString());
-            ret = new BoxFileOutputStream(executor,
-                (BoxFolder) parentInfo.getResource(),
+            final BoxFolder folder = wrapper.getFolder(parent);
+            ret = new BoxFileOutputStream(executor, folder,
                 realPath.getFileName().toString());
+        } else {
+            if (set.contains(StandardOpenOption.CREATE_NEW))
+                throw new FileAlreadyExistsException(target);
+            if (isDirectory(item))
+                throw new IsDirectoryException(target);
+            ret = new BoxFileOutputStream(executor, asFile(item));
         }
 
         return ret;
@@ -187,63 +175,37 @@ public final class BoxFileSystemDriverV2
         throws IOException
     {
         final Path realPath = dir.toRealPath();
-        final String target = realPath.toString();
-        final BoxItem.Info info = lookupPath(realPath);
+        final BoxFolder folder = wrapper.getFolder(realPath);
 
-        if (info == null)
-            throw new NoSuchFileException(target);
-        if (BoxType.getType(info) != BoxType.DIRECTORY)
-            throw new NotDirectoryException(target);
-
-        final BoxFolder folder = (BoxFolder) info.getResource();
-
-        final Iterator<BoxItem.Info> children;
-
-        // TODO: check that this call can do that
+        /*
+         * TODO! Find a better way...
+         *
+         * The problem is that a BoxFolder's .getChildren() will do pagination
+         * by itself; and this may fail with a BoxAPIException. We don't want
+         * to throw that from within an Iterator, we therefore swallow
+         * everything :/
+         */
+        final List<Path> list = new ArrayList<>();
         try {
-            children = folder.getChildren().iterator();
+            for (final BoxItem.Info info : folder.getChildren("name"))
+                list.add(dir.resolve(info.getName()));
         } catch (BoxAPIException e) {
             throw BoxIOException.wrap(e);
         }
 
-        // TODO: context?
-        @SuppressWarnings("AnonymousInnerClassWithTooManyMethods")
-        final Iterator<Path> iterator = new Iterator<Path>()
-        {
-            @Override
-            public boolean hasNext()
-            {
-                return children.hasNext();
-            }
-
-            @Override
-            public Path next()
-            {
-                // Note: relies on children throwing NoSuchElementException
-                final String name = children.next().getName();
-                return dir.resolve(name);
-            }
-
-            @Override
-            public void remove()
-            {
-                throw new UnsupportedOperationException();
-            }
-        };
-
+        //noinspection AnonymousInnerClassWithTooManyMethods
         return new DirectoryStream<Path>()
         {
             @Override
             public Iterator<Path> iterator()
             {
-                return iterator;
+                return list.iterator();
             }
 
             @Override
             public void close()
                 throws IOException
             {
-                // TODO: is there anything to do here?
             }
         };
     }
@@ -254,26 +216,23 @@ public final class BoxFileSystemDriverV2
      * @param dir the directory to create
      * @param attrs the attributes with which the directory should be created
      * @throws IOException filesystem level error, or a plain I/O error
-     * @see FileSystemProvider#newDirectoryStream(Path, DirectoryStream.Filter)
+     * @see FileSystemProvider#createDirectory(Path, FileAttribute[])
      */
     @Override
     public void createDirectory(final Path dir, final FileAttribute<?>... attrs)
         throws IOException
     {
+        if (attrs.length != 0)
+            throw new UnsupportedOperationException();
         final Path realPath = dir.toRealPath();
-        final BoxItem.Info info = lookupPath(realPath);
+        final BoxItem item = wrapper.getItem(realPath);
 
         //noinspection VariableNotUsedInsideIf
-        if (info != null)
-            throw new FileAlreadyExistsException(realPath.toString());
+        if (item != null)
+            throw new FileAlreadyExistsException(dir.toString());
 
         final Path parent = realPath.getParent();
-        final BoxItem.Info parentInfo = lookupPath(parent);
-
-        if (parentInfo == null)
-            throw new NoSuchFileException(parent.toString());
-
-        final BoxFolder folder = (BoxFolder) parentInfo.getResource();
+        final BoxFolder folder = wrapper.getFolder(parent);
         final String name = realPath.getFileName().toString();
 
         try {
@@ -294,33 +253,7 @@ public final class BoxFileSystemDriverV2
     public void delete(final Path path)
         throws IOException
     {
-        final Path realPath = path.toRealPath();
-        final String target = realPath.toString();
-        final BoxItem.Info info = lookupPath(realPath);
-
-        if (info == null)
-            throw new NoSuchFileException(target);
-
-        if (BoxType.getType(info) == BoxType.DIRECTORY) {
-            final BoxFolder dir = (BoxFolder) info.getResource();
-            // TODO: check what the API would return if dir non empty
-            if (!directoryIsEmpty(dir))
-                throw new DirectoryNotEmptyException(target);
-            try {
-                dir.delete(false);
-                return;
-            } catch (BoxAPIException e) {
-                throw BoxIOException.wrap(e);
-            }
-        }
-
-        // Not a directory, then a file
-        final BoxFile file = (BoxFile) info.getResource();
-        try {
-            file.delete();
-        } catch (BoxAPIException e) {
-            throw BoxIOException.wrap(e);
-        }
+        wrapper.deleteItem(path.toRealPath());
     }
 
     /**
@@ -338,7 +271,57 @@ public final class BoxFileSystemDriverV2
         final CopyOption... options)
         throws IOException
     {
+        final Set<CopyOption> set = new HashSet<>();
+        Collections.addAll(set, options);
 
+        // TODO!
+        if (set.contains(StandardCopyOption.COPY_ATTRIBUTES))
+            throw new UnsupportedOperationException();
+
+        /*
+         * Check source validity; it must exist (obviously) and must not be a
+         * non empty directory.
+         */
+        final Path srcPath = source.toRealPath();
+        final String src = srcPath.toString();
+        final BoxItem srcItem = wrapper.getItem(srcPath);
+
+        if (srcItem == null)
+            throw new NoSuchFileException(src);
+
+        final boolean directory = isDirectory(srcItem);
+        if (directory)
+            if (!wrapper.dirIsEmpty(asDirectory(srcItem)))
+                throw new DirectoryNotEmptyException(src);
+
+        /*
+         * Check destination validity; if it exists and we have not been
+         * instructed to replace it, fail; if we _have_ been instructed to
+         * replace it, check that it is either a file or a non empty directory.
+         */
+        final Path dstPath = target.toRealPath();
+        final String dst = dstPath.toString();
+        final BoxItem dstItem = wrapper.getItem(dstPath);
+
+        //noinspection VariableNotUsedInsideIf
+        if (dstItem != null) {
+            if (!set.contains(StandardCopyOption.REPLACE_EXISTING))
+                throw new FileAlreadyExistsException(dst);
+            wrapper.deleteItem(dstPath);
+        }
+
+        // TODO: not checked whether dstPath is / here
+        final BoxFolder parent = wrapper.getFolder(dstPath.getParent());
+        final String name = dstPath.getFileName().toString();
+        try {
+            if (directory) {
+                parent.createFolder(name);
+            }
+            else
+                asFile(srcItem).copy(parent, name);
+        } catch (BoxAPIException e) {
+            throw BoxIOException.wrap(e);
+        }
     }
 
     /**
@@ -351,12 +334,66 @@ public final class BoxFileSystemDriverV2
      * @throws IOException filesystem level error, or a plain I/O error
      * @see FileSystemProvider#move(Path, Path, CopyOption...)
      */
+    // TODO: factorize code
+    // TODO: far from being optimized
     @Override
     public void move(final Path source, final Path target,
         final CopyOption... options)
         throws IOException
     {
+        final Set<CopyOption> set = new HashSet<>();
+        Collections.addAll(set, options);
 
+        // TODO!
+        if (set.contains(StandardCopyOption.COPY_ATTRIBUTES))
+            throw new UnsupportedOperationException();
+
+        /*
+         * Check source validity; it must exist (obviously) and must not be a
+         * non empty directory.
+         */
+        final Path srcPath = source.toRealPath();
+        final String src = srcPath.toString();
+        final BoxItem srcItem = wrapper.getItem(srcPath);
+
+        if (srcItem == null)
+            throw new NoSuchFileException(src);
+
+        final boolean directory = isDirectory(srcItem);
+        if (directory)
+            if (!wrapper.dirIsEmpty(asDirectory(srcItem)))
+                throw new DirectoryNotEmptyException(src);
+
+        /*
+         * Check destination validity; if it exists and we have not been
+         * instructed to replace it, fail; if we _have_ been instructed to
+         * replace it, check that it is either a file or a non empty directory.
+         */
+        final Path dstPath = target.toRealPath();
+        final String dst = dstPath.toString();
+        final BoxItem dstItem = wrapper.getItem(dstPath);
+
+        //noinspection VariableNotUsedInsideIf
+        if (dstItem != null) {
+            if (!set.contains(StandardCopyOption.REPLACE_EXISTING))
+                throw new FileAlreadyExistsException(dst);
+            wrapper.deleteItem(dstPath);
+        }
+
+        // TODO: not checked whether dstPath is / here
+        final BoxFolder parent = wrapper.getFolder(dstPath.getParent());
+        final String name = dstPath.getFileName().toString();
+        try {
+            if (directory) {
+                parent.createFolder(name);
+            } else {
+                asFile(srcItem).copy(parent, name);
+            }
+            // This is the only line which is no in .copy(). Meh.
+            wrapper.deleteItem(srcPath);
+        } catch (BoxAPIException e) {
+            throw BoxIOException.wrap(e);
+        }
     }
 
     /**
@@ -373,7 +410,18 @@ public final class BoxFileSystemDriverV2
     public void checkAccess(final Path path, final AccessMode... modes)
         throws IOException
     {
+        final Path realPath = path.toRealPath();
+        final String s = realPath.toString();
+        final BoxItem item = wrapper.getItem(realPath);
 
+        if (item == null)
+            throw new NoSuchFileException(s);
+        final Set<AccessMode> set = EnumSet.noneOf(AccessMode.class);
+        Collections.addAll(set, modes);
+
+        // TODO: access handling... But for now...
+        if (isFile(item) && set.contains(AccessMode.EXECUTE))
+            throw new AccessDeniedException(s);
     }
 
     /**
@@ -391,6 +439,7 @@ public final class BoxFileSystemDriverV2
     public <V extends FileAttributeView> V getFileAttributeView(final Path path,
         final Class<V> type, final LinkOption... options)
     {
+        //TODO
         return null;
     }
 
@@ -411,7 +460,8 @@ public final class BoxFileSystemDriverV2
         final Class<A> type, final LinkOption... options)
         throws IOException
     {
-        return null;
+        // TODO
+        throw new UnsupportedOperationException();
     }
 
     /**
@@ -435,7 +485,8 @@ public final class BoxFileSystemDriverV2
         final String attributes, final LinkOption... options)
         throws IOException
     {
-        return null;
+        // TODO
+        throw new UnsupportedOperationException();
     }
 
     /**
@@ -460,7 +511,8 @@ public final class BoxFileSystemDriverV2
         final Object value, final LinkOption... options)
         throws IOException
     {
-
+        // TODO
+        throw new UnsupportedOperationException();
     }
 
     /**
@@ -474,48 +526,26 @@ public final class BoxFileSystemDriverV2
     public void close()
         throws IOException
     {
-
+        // TODO! Is there anything to be done here?
     }
 
-    // Note: path must be absolute
-    @Nullable
-    private BoxItem.Info lookupPath(final Path path)
-        throws BoxIOException
+    private static boolean isDirectory(final BoxItem item)
     {
-        BoxFolder dir = rootFolder;
-        BoxItem.Info info = rootFolder.getInfo();
-
-        final int nameCount = path.getNameCount();
-
-        int count = 0;
-        String name;
-
-        for (final Path entry: path) {
-            count++;
-            name = entry.toString();
-            try {
-                info = BoxUtil.findEntryByName(dir, name);
-            } catch (BoxAPIException e) {
-                throw BoxIOException.wrap(e);
-            }
-            if (info == null)
-                return null;
-            if (BoxType.getType(info) == BoxType.FILE)
-                break;
-            // TODO: check, but that shouldn't throw an exception
-            dir = (BoxFolder) info.getResource();
-        }
-
-        return count == nameCount ? info : null;
+        return item instanceof BoxFolder;
     }
 
-    private boolean directoryIsEmpty(final BoxFolder directory)
-        throws BoxIOException
+    private static BoxFolder asDirectory(final BoxItem item)
     {
-        try {
-            return directory.iterator().hasNext();
-        } catch (BoxAPIException e) {
-            throw BoxIOException.wrap(e);
-        }
+        return (BoxFolder) item;
+    }
+
+    private static boolean isFile(final BoxItem item)
+    {
+        return item instanceof BoxFile;
+    }
+
+    private static BoxFile asFile(final BoxItem item)
+    {
+        return (BoxFile) item;
     }
 }
