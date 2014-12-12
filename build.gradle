@@ -64,7 +64,6 @@ repositories {
 dependencies {
     compile(group: "com.github.fge", name: "java7-fs-base",
         version: "0.0.2-SNAPSHOT");
-    compile(group: "net.box", name: "boxjavalibv2", version: "3.1.7");
     compile(group: "com.box", name: "box-java-sdk", version: "0.5.0");
     provided(group: "com.google.code.findbugs", name: "jsr305",
         version: "3.0.0");
