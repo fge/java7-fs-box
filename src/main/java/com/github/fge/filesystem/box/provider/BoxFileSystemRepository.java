@@ -38,6 +38,7 @@ public final class BoxFileSystemRepository
         throws IOException
     {
         final String accessToken = (String) env.get(ACCESS_TOKEN);
+
         if (accessToken == null)
             throw new IllegalArgumentException("access token not found");
 
@@ -46,12 +47,14 @@ public final class BoxFileSystemRepository
         final BoxAPIConnection api = new BoxAPIConnection(accessToken);
         final BoxAPIWrapper wrapper = new DefaultBoxAPIWrapper(api);
         final FileStore store;
+
         try {
             final BoxFolder root = BoxFolder.getRootFolder(api);
             store = new BoxFileStore(root.getInfo(), attributesFactory);
         } catch (BoxAPIException e) {
             throw BoxIOException.wrap(e);
         }
-        return new BoxFileSystemDriver(uri,store, attributesFactory, wrapper);
+
+        return new BoxFileSystemDriver(uri, store, attributesFactory, wrapper);
     }
 }
