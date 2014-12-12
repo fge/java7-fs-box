@@ -50,7 +50,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-//TODO: optimize by first looking up the parent where possible
+/**
+ * Box filesystem driver
+ *
+ */
 @SuppressWarnings("OverloadedVarargsMethod")
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemDriverV2
@@ -291,7 +294,7 @@ public final class BoxFileSystemDriverV2
 
         final boolean directory = isDirectory(srcItem);
         if (directory)
-            if (!wrapper.dirIsEmpty(asDirectory(srcItem)))
+            if (!wrapper.folderIsEmpty(asDirectory(srcItem)))
                 throw new DirectoryNotEmptyException(src);
 
         /*
@@ -361,7 +364,7 @@ public final class BoxFileSystemDriverV2
 
         final boolean directory = isDirectory(srcItem);
         if (directory)
-            if (!wrapper.dirIsEmpty(asDirectory(srcItem)))
+            if (!wrapper.folderIsEmpty(asDirectory(srcItem)))
                 throw new DirectoryNotEmptyException(src);
 
         /*

@@ -11,6 +11,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.nio.file.DirectoryNotEmptyException;
+import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
@@ -21,8 +22,10 @@ import java.nio.file.Path;
  * <p>All calls to the API are wrapped so that a {@link BoxIOException} is
  * thrown instead of the (unchecked) {@link BoxAPIException}.</p>
  *
- * <p>It is the caller's responsibility to ensure that all paths are absolute.
- * </p>
+ * <p>It is the caller's responsibility to ensure that all paths are absolute
+ * (see {@link Path#toRealPath(LinkOption...)}).</p>
+ *
+ * @see BoxFileSystemDriverV2
  */
 @ParametersAreNonnullByDefault
 public interface BoxAPIWrapper
@@ -71,7 +74,7 @@ public interface BoxAPIWrapper
      * @return true if this folder has zero entries
      * @throws BoxIOException Box API error
      */
-    boolean dirIsEmpty(BoxFolder folder)
+    boolean folderIsEmpty(BoxFolder folder)
         throws BoxIOException;
 
     /**
