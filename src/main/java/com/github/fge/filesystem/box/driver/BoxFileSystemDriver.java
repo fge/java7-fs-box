@@ -51,14 +51,14 @@ import java.util.concurrent.Future;
  */
 @SuppressWarnings("OverloadedVarargsMethod")
 @ParametersAreNonnullByDefault
-public final class BoxFileSystemDriverV2
+public final class BoxFileSystemDriver
     extends UnixLikeFileSystemDriverBase
 {
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
     private final BoxAPIWrapper wrapper;
 
-    public BoxFileSystemDriverV2(final URI uri, final FileStore fileStore,
+    public BoxFileSystemDriver(final URI uri, final FileStore fileStore,
         final FileAttributesFactory attributesFactory,
         final BoxAPIWrapper wrapper)
     {

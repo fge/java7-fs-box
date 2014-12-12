@@ -25,7 +25,7 @@ import java.nio.file.Path;
  * <p>It is the caller's responsibility to ensure that all paths are absolute
  * (see {@link Path#toRealPath(LinkOption...)}).</p>
  *
- * @see BoxFileSystemDriverV2
+ * @see BoxFileSystemDriver
  */
 @ParametersAreNonnullByDefault
 public interface BoxAPIWrapper
