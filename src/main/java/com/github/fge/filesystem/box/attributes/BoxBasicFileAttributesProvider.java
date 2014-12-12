@@ -11,6 +11,7 @@ import com.github.fge.filesystem.box.exceptions.BoxIOException;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.IOException;
+import java.nio.file.attribute.FileTime;
 
 @ParametersAreNonnullByDefault
 public final class BoxBasicFileAttributesProvider
@@ -28,6 +29,18 @@ public final class BoxBasicFileAttributesProvider
             throw BoxIOException.wrap(e);
         }
         isFolder = item instanceof BoxFolder;
+    }
+
+    @Override
+    public FileTime lastModifiedTime()
+    {
+        return FileTime.fromMillis(info.getModifiedAt().getTime());
+    }
+
+    @Override
+    public FileTime creationTime()
+    {
+        return FileTime.fromMillis(info.getCreatedAt().getTime());
     }
 
     /**
