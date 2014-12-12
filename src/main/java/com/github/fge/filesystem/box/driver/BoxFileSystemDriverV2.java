@@ -4,6 +4,7 @@ import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
+import com.github.fge.filesystem.attributes.FileAttributesFactory;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.io.BoxFileInputStream;
 import com.github.fge.filesystem.box.io.BoxFileOutputStream;
@@ -11,7 +12,6 @@ import com.github.fge.filesystem.driver.UnixLikeFileSystemDriverBase;
 import com.github.fge.filesystem.exceptions.IsDirectoryException;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,16 +25,12 @@ import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileStore;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,7 +38,6 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -64,9 +59,10 @@ public final class BoxFileSystemDriverV2
     private final BoxAPIWrapper wrapper;
 
     public BoxFileSystemDriverV2(final URI uri, final FileStore fileStore,
+        final FileAttributesFactory attributesFactory,
         final BoxAPIWrapper wrapper)
     {
-        super(uri, fileStore);
+        super(uri, fileStore, attributesFactory);
         this.wrapper = Objects.requireNonNull(wrapper);
     }
 
@@ -427,95 +423,17 @@ public final class BoxFileSystemDriverV2
             throw new AccessDeniedException(s);
     }
 
-    /**
-     * Read an attribute view for a given path on this filesystem
-     *
-     * @param path the path to read attributes from
-     * @param type the class of attribute view to return
-     * @param options the link options
-     * @return the attributes view; {@code null} if this view is not supported
-     *
-     * @see FileSystemProvider#getFileAttributeView(Path, Class, LinkOption...)
-     */
-    @Nullable
+    @Nonnull
     @Override
-    public <V extends FileAttributeView> V getFileAttributeView(final Path path,
-        final Class<V> type, final LinkOption... options)
-    {
-        //TODO
-        return null;
-    }
-
-    /**
-     * Read attributes from a path on this filesystem
-     *
-     * @param path the path to read attributes from
-     * @param type the class of attributes to read
-     * @param options the link options
-     * @return the attributes
-     *
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @throws UnsupportedOperationException attribute type not supported
-     * @see FileSystemProvider#readAttributes(Path, Class, LinkOption...)
-     */
-    @Override
-    public <A extends BasicFileAttributes> A readAttributes(final Path path,
-        final Class<A> type, final LinkOption... options)
+    public BoxItem getPathMetadata(final Path path)
         throws IOException
     {
-        // TODO
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Read a list of attributes from a path on this filesystem
-     *
-     * @param path the path to read attributes from
-     * @param attributes the list of attributes to read
-     * @param options the link options
-     * @return the relevant attributes as a map
-     *
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @throws IllegalArgumentException malformed attributes string; or a
-     * specified attribute does not exist
-     * @throws UnsupportedOperationException one or more attribute(s) is/are not
-     * supported
-     * @see Files#readAttributes(Path, String, LinkOption...)
-     * @see FileSystemProvider#readAttributes(Path, String, LinkOption...)
-     */
-    @Override
-    public Map<String, Object> readAttributes(final Path path,
-        final String attributes, final LinkOption... options)
-        throws IOException
-    {
-        // TODO
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Set an attribute for a path on this filesystem
-     *
-     * @param path the victim
-     * @param attribute the name of the attribute to set
-     * @param value the value to set
-     * @param options the link options
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @throws IllegalArgumentException malformed attribute, or the specified
-     * attribute does not exist
-     * @throws UnsupportedOperationException the attribute to set is not
-     * supported by this filesystem
-     * @throws ClassCastException attribute value is of the wrong class for the
-     * specified attribute
-     * @see Files#setAttribute(Path, String, Object, LinkOption...)
-     * @see FileSystemProvider#setAttribute(Path, String, Object, LinkOption...)
-     */
-    @Override
-    public void setAttribute(final Path path, final String attribute,
-        final Object value, final LinkOption... options)
-        throws IOException
-    {
-        // TODO
-        throw new UnsupportedOperationException();
+        // TODO: when symlinks are supported this may turn out to be wrong
+        final Path target = path.toRealPath();
+        final BoxItem item = wrapper.getItem(target);
+        if (item == null)
+            throw new NoSuchFileException(target.toString());
+        return item;
     }
 
     /**
