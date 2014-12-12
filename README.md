@@ -1,0 +1,31 @@
+## Read me first
+
+This project is licensed under both LGPLv3 and ASL 2.0. See file LICENSE for more details.
+
+## What this is
+
+This is an implementation of a Java 7
+[`FileSystem`](https://docs.oracle.com/javase/7/docs/api/java/nio/file/FileSystem.html) over
+[Box.com](https://box.com). This implementation is based on
+[java7-fs-base](https://github.com/fge/java7-fs-base).
+
+Note that it does not make use of the Android SDK (see
+[here](https://github.com/box/box-java-sdk-v2) but of the [new
+API](https://github.com/box/box-java-sdk).
+
+## Status
+
+In development...
+
+## Building
+
+Right now, this project uses the latest HEAD of java7-fs-base. You therefore need to clone it (see
+link above), then build and install it in your local maven repo using:
+
+```
+# Replace ./gradlew with gradlew.bat if you run Windows
+./gradlew clean test install
+```
+
+Then clone this project.
+
