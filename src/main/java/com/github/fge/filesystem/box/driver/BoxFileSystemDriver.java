@@ -139,7 +139,7 @@ public final class BoxFileSystemDriver
         final boolean create = item == null;
 
         if (create) {
-            if (!set.contains(StandardOpenOption.CREATE))
+            if (!set.contains(StandardOpenOption.CREATE_NEW))
                 throw new NoSuchFileException(target);
             // TODO: check; parent should always exist
             final Path parent = realPath.getParent();
