@@ -39,7 +39,6 @@ public final class BoxFileInputStream
 
     public BoxFileInputStream(final ExecutorService executor,
         final BoxFile file)
-        throws IOException
     {
         in = new PipedInputStream(16384);
         future = executor.submit(new Callable<Void>()
