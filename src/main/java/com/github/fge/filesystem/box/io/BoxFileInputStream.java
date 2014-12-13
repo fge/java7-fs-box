@@ -117,14 +117,6 @@ public final class BoxFileInputStream
         }
     }
 
-    /**
-     * Closes this input stream and releases any system resources associated
-     * with the stream.
-     * <p> The <code>close</code> method of <code>InputStream</code> does
-     * nothing.
-     *
-     * @throws IOException if an I/O error occurs.
-     */
     @Override
     public void close()
         throws IOException
