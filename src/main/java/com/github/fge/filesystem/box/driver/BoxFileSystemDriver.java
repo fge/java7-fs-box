@@ -16,7 +16,6 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PipedOutputStream;
 import java.net.URI;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
@@ -40,10 +39,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 /**
  * Box filesystem driver
@@ -86,24 +83,7 @@ public final class BoxFileSystemDriver
 
         final BoxFile file = wrapper.getFile(realPath);
 
-        final PipedOutputStream out = new PipedOutputStream();
-
-        final Future<Void> future = executor.submit(new Callable<Void>()
-        {
-            @Override
-            public Void call()
-                throws BoxIOException
-            {
-                try {
-                    file.download(out);
-                    return null;
-                } catch (BoxAPIException e) {
-                    throw BoxIOException.wrap(e);
-                }
-            }
-        });
-
-        return new BoxFileInputStream(future, out);
+        return new BoxFileInputStream(executor, file);
     }
 
     /**

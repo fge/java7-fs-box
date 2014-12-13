@@ -1,5 +1,6 @@
 package com.github.fge.filesystem.box.io;
 
+import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.driver.FileSystemDriver;
@@ -13,10 +14,13 @@ import java.io.PipedOutputStream;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Wrapper over {@link BoxFile#download(OutputStream)}
@@ -33,29 +37,25 @@ public final class BoxFileInputStream
     private final Future<Void> future;
     private final PipedInputStream in;
 
-    public BoxFileInputStream(final Future<Void> future,
-        final PipedOutputStream out)
-        throws BoxIOException
+    public BoxFileInputStream(final ExecutorService executor,
+        final BoxFile file)
+        throws IOException
     {
-        this.future = Objects.requireNonNull(future);
-        // TODO: make pipe size constant
         in = new PipedInputStream(16384);
-
-        try {
-            out.connect(in);
-        } catch (IOException e) {
-            try {
-                in.close();
-            } catch (IOException e2) {
-                e.addSuppressed(e2);
+        future = executor.submit(new Callable<Void>()
+        {
+            @Override
+            public Void call()
+                throws IOException
+            {
+                try {
+                    file.download(new PipedOutputStream(in));
+                    return null;
+                } catch (BoxAPIException e) {
+                    throw BoxIOException.wrap(e);
+                }
             }
-            try {
-                out.close();
-            } catch (IOException e3) {
-                e.addSuppressed(e3);
-            }
-            throw new BoxIOException("failed to initialize download", e);
-        }
+        });
     }
 
     @Override
@@ -140,9 +140,7 @@ public final class BoxFileInputStream
         }
 
         try {
-            if (!future.isDone())
-                future.cancel(true);
-            future.get();
+            future.get(5L, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             futureException = new BoxIOException("donwload interrupted", e);
@@ -151,6 +149,8 @@ public final class BoxFileInputStream
                 e.getCause());
         } catch (CancellationException e) {
             futureException = new BoxIOException("download cancelled", e);
+        } catch (TimeoutException e) {
+            futureException = new BoxIOException("download timeout", e);
         }
 
         if (futureException != null) {
