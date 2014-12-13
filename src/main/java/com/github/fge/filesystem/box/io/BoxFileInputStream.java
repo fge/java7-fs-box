@@ -30,17 +30,25 @@ import java.util.concurrent.TimeoutException;
  *
  * @see FileSystemDriver#newInputStream(Path, OpenOption...)
  */
+@SuppressWarnings("ImplicitNumericConversion")
 @ParametersAreNonnullByDefault
 public final class BoxFileInputStream
     extends InputStream
 {
     private final Future<Void> future;
     private final PipedInputStream in;
+    private final PipedOutputStream out;
+
+    private long size;
 
     public BoxFileInputStream(final ExecutorService executor,
         final BoxFile file)
+        throws IOException
     {
+        size = file.getInfo().getSize();
         in = new PipedInputStream(16384);
+        out = new PipedOutputStream(in);
+
         future = executor.submit(new Callable<Void>()
         {
             @Override
@@ -48,7 +56,7 @@ public final class BoxFileInputStream
                 throws IOException
             {
                 try {
-                    file.download(new PipedOutputStream(in));
+                    file.download(out);
                     return null;
                 } catch (BoxAPIException e) {
                     throw BoxIOException.wrap(e);
@@ -61,6 +69,8 @@ public final class BoxFileInputStream
     public int read()
         throws IOException
     {
+        if (size-- == 0)
+            return -1;
         try {
             return in.read();
         } catch (IOException e) {
@@ -73,8 +83,13 @@ public final class BoxFileInputStream
     public int read(final byte[] b)
         throws IOException
     {
+        if (size == 0)
+            return -1;
         try {
-            return in.read(b);
+            final int nrBytes = in.read(b);
+            if (nrBytes != -1)
+                size -= nrBytes;
+            return nrBytes;
         } catch (IOException e) {
             future.cancel(true);
             throw new BoxIOException("download failure", e);
@@ -85,8 +100,13 @@ public final class BoxFileInputStream
     public int read(final byte[] b, final int off, final int len)
         throws IOException
     {
+        if (size == 0)
+            return -1;
         try {
-            return in.read(b, off, len);
+            final int nrBytes = in.read(b, off, len);
+            if (nrBytes != -1)
+                size -= nrBytes;
+            return nrBytes;
         } catch (IOException e) {
             future.cancel(true);
             throw new BoxIOException("download failure", e);
@@ -98,6 +118,7 @@ public final class BoxFileInputStream
         throws IOException
     {
         try {
+            size = Math.max(0, size - n);
             return in.skip(n);
         } catch (IOException e) {
             future.cancel(true);
