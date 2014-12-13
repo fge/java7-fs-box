@@ -20,6 +20,8 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Wrapper over a file upload over the box.com API
@@ -198,22 +200,36 @@ public final class BoxFileOutputStream
         IOException streamException = null;
         IOException futureException = null;
 
+        /*
+         * TODO: is this necessary? Let's not take any risks...
+         */
         try {
-            out.close();
+            out.flush();
         } catch (IOException e) {
             streamException = e;
         }
 
         try {
-            if (!future.isDone())
-                future.cancel(true);
-            future.get();
+            out.close();
+        } catch (IOException e) {
+            if (streamException != null)
+                streamException.addSuppressed(e);
+            else
+                streamException = e;
+        }
+
+        try {
+            // TODO: seems a little high; make that a copy option?
+            future.get(5L, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             futureException = new BoxIOException("upload interrupted", e);
         } catch (ExecutionException e) {
             futureException = new BoxIOException("upload failed", e.getCause());
         } catch (CancellationException e) {
             futureException = new BoxIOException("upload cancelled", e);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            futureException = new BoxIOException("upload timeout", e);
         }
 
         if (futureException != null) {
