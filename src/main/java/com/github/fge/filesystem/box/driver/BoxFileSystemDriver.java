@@ -16,7 +16,6 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
@@ -55,11 +54,11 @@ public final class BoxFileSystemDriver
 
     private final BoxAPIWrapper wrapper;
 
-    public BoxFileSystemDriver(final URI uri, final FileStore fileStore,
+    public BoxFileSystemDriver(final FileStore fileStore,
         final FileAttributesFactory attributesFactory,
         final BoxAPIWrapper wrapper)
     {
-        super(uri, fileStore, attributesFactory);
+        super(fileStore, attributesFactory);
         this.wrapper = Objects.requireNonNull(wrapper);
     }
 

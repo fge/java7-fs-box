@@ -55,6 +55,6 @@ public final class BoxFileSystemRepository
             throw BoxIOException.wrap(e);
         }
 
-        return new BoxFileSystemDriver(uri, store, attributesFactory, wrapper);
+        return new BoxFileSystemDriver(store, attributesFactory, wrapper);
     }
 }
