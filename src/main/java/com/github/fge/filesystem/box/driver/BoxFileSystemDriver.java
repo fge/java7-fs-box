@@ -78,7 +78,7 @@ public final class BoxFileSystemDriver
         final OpenOption... options)
         throws IOException
     {
-        final Path realPath = path.toRealPath();
+        final Path realPath = path.toAbsolutePath();
 
         final BoxFile file = wrapper.getFile(realPath);
 
@@ -110,7 +110,7 @@ public final class BoxFileSystemDriver
         if (set.contains(StandardOpenOption.APPEND))
             throw new UnsupportedOperationException();
 
-        final Path realPath = path.toRealPath();
+        final Path realPath = path.toAbsolutePath();
 
         final OutputStream ret;
         final String target = realPath.toString();
@@ -152,7 +152,7 @@ public final class BoxFileSystemDriver
         final DirectoryStream.Filter<? super Path> filter)
         throws IOException
     {
-        final Path realPath = dir.toRealPath();
+        final Path realPath = dir.toAbsolutePath();
         final BoxFolder folder = wrapper.getFolder(realPath);
 
         /*
@@ -202,7 +202,7 @@ public final class BoxFileSystemDriver
     {
         if (attrs.length != 0)
             throw new UnsupportedOperationException();
-        final Path realPath = dir.toRealPath();
+        final Path realPath = dir.toAbsolutePath();
         final BoxItem item = wrapper.getItem(realPath);
 
         //noinspection VariableNotUsedInsideIf
@@ -231,7 +231,7 @@ public final class BoxFileSystemDriver
     public void delete(final Path path)
         throws IOException
     {
-        wrapper.deleteItem(path.toRealPath());
+        wrapper.deleteItem(path.toAbsolutePath());
     }
 
     /**
@@ -260,7 +260,7 @@ public final class BoxFileSystemDriver
          * Check source validity; it must exist (obviously) and must not be a
          * non empty directory.
          */
-        final Path srcPath = source.toRealPath();
+        final Path srcPath = source.toAbsolutePath();
         final String src = srcPath.toString();
         final BoxItem srcItem = wrapper.getItem(srcPath);
 
@@ -277,7 +277,7 @@ public final class BoxFileSystemDriver
          * instructed to replace it, fail; if we _have_ been instructed to
          * replace it, check that it is either a file or a non empty directory.
          */
-        final Path dstPath = target.toRealPath();
+        final Path dstPath = target.toAbsolutePath();
         final String dst = dstPath.toString();
         final BoxItem dstItem = wrapper.getItem(dstPath);
 
@@ -330,7 +330,7 @@ public final class BoxFileSystemDriver
          * Check source validity; it must exist (obviously) and must not be a
          * non empty directory.
          */
-        final Path srcPath = source.toRealPath();
+        final Path srcPath = source.toAbsolutePath();
         final String src = srcPath.toString();
         final BoxItem srcItem = wrapper.getItem(srcPath);
 
@@ -347,7 +347,7 @@ public final class BoxFileSystemDriver
          * instructed to replace it, fail; if we _have_ been instructed to
          * replace it, check that it is either a file or a non empty directory.
          */
-        final Path dstPath = target.toRealPath();
+        final Path dstPath = target.toAbsolutePath();
         final String dst = dstPath.toString();
         final BoxItem dstItem = wrapper.getItem(dstPath);
 
@@ -388,7 +388,7 @@ public final class BoxFileSystemDriver
     public void checkAccess(final Path path, final AccessMode... modes)
         throws IOException
     {
-        final Path realPath = path.toRealPath();
+        final Path realPath = path.toAbsolutePath();
         final String s = realPath.toString();
         final BoxItem item = wrapper.getItem(realPath);
 
@@ -408,7 +408,7 @@ public final class BoxFileSystemDriver
         throws IOException
     {
         // TODO: when symlinks are supported this may turn out to be wrong
-        final Path target = path.toRealPath();
+        final Path target = path.toAbsolutePath();
         final BoxItem item = wrapper.getItem(target);
         if (item == null)
             throw new NoSuchFileException(target.toString());
