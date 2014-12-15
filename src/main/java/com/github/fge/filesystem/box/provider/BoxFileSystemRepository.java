@@ -3,8 +3,6 @@ package com.github.fge.filesystem.box.provider;
 import com.box.sdk.BoxAPIConnection;
 import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFolder;
-import com.github.fge.filesystem.attributes.FileAttributesFactory;
-import com.github.fge.filesystem.box.attributes.BoxFileAttributesFactory;
 import com.github.fge.filesystem.box.driver.BoxAPIWrapper;
 import com.github.fge.filesystem.box.driver.BoxFileSystemDriver;
 import com.github.fge.filesystem.box.driver.DefaultBoxAPIWrapper;
@@ -28,7 +26,7 @@ public final class BoxFileSystemRepository
 
     public BoxFileSystemRepository()
     {
-        super("box");
+        super("box", new BoxFileSystemFactoryProvider());
     }
 
     @Nonnull
@@ -42,19 +40,18 @@ public final class BoxFileSystemRepository
         if (accessToken == null)
             throw new IllegalArgumentException("access token not found");
 
-        final FileAttributesFactory attributesFactory
-            = new BoxFileAttributesFactory();
         final BoxAPIConnection api = new BoxAPIConnection(accessToken);
         final BoxAPIWrapper wrapper = new DefaultBoxAPIWrapper(api);
         final FileStore store;
 
         try {
             final BoxFolder root = BoxFolder.getRootFolder(api);
-            store = new BoxFileStore(root.getInfo(), attributesFactory);
+            store = new BoxFileStore(root.getInfo(),
+                factoryProvider.getAttributesFactory());
         } catch (BoxAPIException e) {
             throw BoxIOException.wrap(e);
         }
 
-        return new BoxFileSystemDriver(store, attributesFactory, wrapper);
+        return new BoxFileSystemDriver(store, factoryProvider, wrapper);
     }
 }

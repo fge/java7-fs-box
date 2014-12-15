@@ -4,12 +4,12 @@ import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
-import com.github.fge.filesystem.attributes.FileAttributesFactory;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.io.BoxFileInputStream;
 import com.github.fge.filesystem.box.io.BoxFileOutputStream;
 import com.github.fge.filesystem.driver.UnixLikeFileSystemDriverBase;
 import com.github.fge.filesystem.exceptions.IsDirectoryException;
+import com.github.fge.filesystem.provider.FileSystemFactoryProvider;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -55,10 +55,10 @@ public final class BoxFileSystemDriver
     private final BoxAPIWrapper wrapper;
 
     public BoxFileSystemDriver(final FileStore fileStore,
-        final FileAttributesFactory attributesFactory,
+        final FileSystemFactoryProvider factoryProvider,
         final BoxAPIWrapper wrapper)
     {
-        super(fileStore, attributesFactory);
+        super(fileStore, factoryProvider);
         this.wrapper = Objects.requireNonNull(wrapper);
     }
 

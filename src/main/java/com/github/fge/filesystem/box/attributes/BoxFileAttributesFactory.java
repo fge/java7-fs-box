@@ -8,7 +8,7 @@ public final class BoxFileAttributesFactory
 {
     public BoxFileAttributesFactory()
     {
-        addImplementation("basic", BoxBasicFileAttributesProvider.class,
-            BoxItem.class);
+        setMetadataClass(BoxItem.class);
+        addImplementation("basic", BoxBasicFileAttributesProvider.class);
     }
 }
