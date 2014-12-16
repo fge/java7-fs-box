@@ -71,18 +71,14 @@ public final class DefaultBoxAPIWrapper
      * @return the file
      *
      * @throws BoxIOException Box API error
-     * @throws NoSuchFileException file does not exist
      * @throws IsDirectoryException item at this path is a directory
      */
     @Nonnull
     @Override
     public BoxFile getFile(final Path path)
-        throws BoxIOException, NoSuchFileException, IsDirectoryException
+        throws BoxIOException, IsDirectoryException
     {
         final BoxItem item = getItem(path);
-
-        if (item == null)
-            throw new NoSuchFileException(path.toString());
 
         if (!(item instanceof BoxFile))
             throw new IsDirectoryException(path.toString());
@@ -103,12 +99,9 @@ public final class DefaultBoxAPIWrapper
     @Nonnull
     @Override
     public BoxFolder getFolder(final Path path)
-        throws BoxIOException, NoSuchFileException, NotDirectoryException
+        throws BoxIOException, NotDirectoryException
     {
         final BoxItem item = getItem(path);
-
-        if (item == null)
-            throw new NoSuchFileException(path.toString());
 
         if (!(item instanceof BoxFolder))
             throw new NotDirectoryException(path.toString());
@@ -145,12 +138,9 @@ public final class DefaultBoxAPIWrapper
      */
     @Override
     public void deleteItem(final Path victim)
-        throws BoxIOException, NoSuchFileException, DirectoryNotEmptyException
+        throws BoxIOException, DirectoryNotEmptyException
     {
         final BoxItem item = getItem(victim);
-
-        if (item == null)
-            throw new NoSuchFileException(victim.toString());
 
         if (item instanceof BoxFile) {
             try {

@@ -12,7 +12,6 @@ import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 
@@ -37,6 +36,7 @@ public interface BoxAPIWrapper
      * @return the item, or {@code null} if not found
      * @throws BoxIOException Box API error
      */
+    // TODO: metadata driver!
     @Nullable
     BoxItem getItem(Path path)
         throws BoxIOException;
@@ -47,12 +47,11 @@ public interface BoxAPIWrapper
      * @param path the path
      * @return the file
      * @throws BoxIOException Box API error
-     * @throws NoSuchFileException file does not exist
      * @throws IsDirectoryException item at this path is a directory
      */
     @Nonnull
     BoxFile getFile(Path path)
-        throws BoxIOException, NoSuchFileException, IsDirectoryException;
+        throws BoxIOException, IsDirectoryException;
 
     /**
      * Get a directory by its path
@@ -60,12 +59,11 @@ public interface BoxAPIWrapper
      * @param path the path
      * @return the directory
      * @throws BoxIOException Box API error
-     * @throws NoSuchFileException directory does not exist
      * @throws NotDirectoryException item at this path is not a directory
      */
     @Nonnull
     BoxFolder getFolder(Path path)
-        throws BoxIOException, NoSuchFileException, NotDirectoryException;
+        throws BoxIOException, NotDirectoryException;
 
     /**
      * Tell whether a folder is empty
@@ -82,9 +80,8 @@ public interface BoxAPIWrapper
      *
      * @param victim the item to delete
      * @throws BoxIOException Box API error
-     * @throws NoSuchFileException item does not exist
      * @throws DirectoryNotEmptyException victim is a non empty directory
      */
     void deleteItem(Path victim)
-        throws BoxIOException, NoSuchFileException, DirectoryNotEmptyException;
+        throws BoxIOException, DirectoryNotEmptyException;
 }

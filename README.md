@@ -15,7 +15,13 @@ API](https://github.com/box/box-java-sdk).
 
 ## Status
 
-In development...
+In active development.
+
+The basic I/O operations work: you can download and upload files, create and delete entries, and a
+few other things.
+
+The status is as of yet unclear and highly tied to java7-fs-base, so please refer to this project
+for more details.
 
 ## Building
 

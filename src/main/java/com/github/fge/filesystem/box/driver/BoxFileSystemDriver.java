@@ -26,14 +26,11 @@ import java.nio.file.FileStore;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -62,20 +59,10 @@ public final class BoxFileSystemDriver
         this.wrapper = Objects.requireNonNull(wrapper);
     }
 
-    /**
-     * Obtain a new {@link InputStream} from a path for this filesystem
-     *
-     * @param path the path
-     * @param options the set of open options
-     * @return a new input stream
-     *
-     * @throws IOException filesystem level error, or plain I/O error
-     * @see FileSystemProvider#newInputStream(Path, OpenOption...)
-     */
     @Nonnull
     @Override
     public InputStream newInputStream(final Path path,
-        final OpenOption... options)
+        final Set<OpenOption> options)
         throws IOException
     {
         final Path realPath = path.toAbsolutePath();
@@ -85,31 +72,13 @@ public final class BoxFileSystemDriver
         return new BoxFileInputStream(executor, file);
     }
 
-    /**
-     * Obtain a new {@link OutputStream} from a path for this filesystem
-     *
-     * @param path the path
-     * @param options the set of open options
-     * @return a new output stream
-     *
-     * @throws IOException filesystem level error, or plain I/O error
-     * @see FileSystemProvider#newOutputStream(Path, OpenOption...)
-     */
     @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
     @Nonnull
     @Override
     public OutputStream newOutputStream(final Path path,
-        final OpenOption... options)
+        final Set<OpenOption> options)
         throws IOException
     {
-        final Set<OpenOption> set = new HashSet<>();
-        Collections.addAll(set, options);
-
-        if (set.contains(StandardOpenOption.DELETE_ON_CLOSE))
-            throw new UnsupportedOperationException();
-        if (set.contains(StandardOpenOption.APPEND))
-            throw new UnsupportedOperationException();
-
         final Path realPath = path.toAbsolutePath();
 
         final OutputStream ret;
@@ -118,16 +87,12 @@ public final class BoxFileSystemDriver
         final boolean create = item == null;
 
         if (create) {
-            if (!set.contains(StandardOpenOption.CREATE_NEW))
-                throw new NoSuchFileException(target);
             // TODO: check; parent should always exist
             final Path parent = realPath.getParent();
             final BoxFolder folder = wrapper.getFolder(parent);
             ret = new BoxFileOutputStream(executor, folder,
                 realPath.getFileName().toString());
         } else {
-            if (set.contains(StandardOpenOption.CREATE_NEW))
-                throw new FileAlreadyExistsException(target);
             if (isDirectory(item))
                 throw new IsDirectoryException(target);
             ret = new BoxFileOutputStream(executor, asFile(item));
@@ -136,16 +101,6 @@ public final class BoxFileSystemDriver
         return ret;
     }
 
-    /**
-     * Create a new directory stream from a path for this filesystem
-     *
-     * @param dir the directory
-     * @param filter a directory entry filter
-     * @return a directory stream
-     *
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @see FileSystemProvider#newDirectoryStream(Path, DirectoryStream.Filter)
-     */
     @Nonnull
     @Override
     public DirectoryStream<Path> newDirectoryStream(final Path dir,
@@ -188,20 +143,10 @@ public final class BoxFileSystemDriver
         };
     }
 
-    /**
-     * Create a new directory from a path on this filesystem
-     *
-     * @param dir the directory to create
-     * @param attrs the attributes with which the directory should be created
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @see FileSystemProvider#createDirectory(Path, FileAttribute[])
-     */
     @Override
     public void createDirectory(final Path dir, final FileAttribute<?>... attrs)
         throws IOException
     {
-        if (attrs.length != 0)
-            throw new UnsupportedOperationException();
         final Path realPath = dir.toAbsolutePath();
         final BoxItem item = wrapper.getItem(realPath);
 
@@ -220,13 +165,6 @@ public final class BoxFileSystemDriver
         }
     }
 
-    /**
-     * Delete a file, or empty directory, matching a path on this filesystem
-     *
-     * @param path the victim
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @see FileSystemProvider#delete(Path)
-     */
     @Override
     public void delete(final Path path)
         throws IOException
@@ -234,28 +172,11 @@ public final class BoxFileSystemDriver
         wrapper.deleteItem(path.toAbsolutePath());
     }
 
-    /**
-     * Copy a file, or empty directory, from one path to another on this
-     * filesystem
-     *
-     * @param source the source path
-     * @param target the target path
-     * @param options the copy options
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @see FileSystemProvider#copy(Path, Path, CopyOption...)
-     */
     @Override
     public void copy(final Path source, final Path target,
-        final CopyOption... options)
+        final Set<CopyOption> options)
         throws IOException
     {
-        final Set<CopyOption> set = new HashSet<>();
-        Collections.addAll(set, options);
-
-        // TODO!
-        if (set.contains(StandardCopyOption.COPY_ATTRIBUTES))
-            throw new UnsupportedOperationException();
-
         /*
          * Check source validity; it must exist (obviously) and must not be a
          * non empty directory.
@@ -264,9 +185,8 @@ public final class BoxFileSystemDriver
         final String src = srcPath.toString();
         final BoxItem srcItem = wrapper.getItem(srcPath);
 
-        if (srcItem == null)
-            throw new NoSuchFileException(src);
-
+        // TODO! metadata driver, yes, again
+        @SuppressWarnings("ConstantConditions")
         final boolean directory = isDirectory(srcItem);
         if (directory)
             if (!wrapper.folderIsEmpty(asDirectory(srcItem)))
@@ -282,11 +202,8 @@ public final class BoxFileSystemDriver
         final BoxItem dstItem = wrapper.getItem(dstPath);
 
         //noinspection VariableNotUsedInsideIf
-        if (dstItem != null) {
-            if (!set.contains(StandardCopyOption.REPLACE_EXISTING))
-                throw new FileAlreadyExistsException(dst);
+        if (dstItem != null)
             wrapper.deleteItem(dstPath);
-        }
 
         // TODO: not checked whether dstPath is / here
         final BoxFolder parent = wrapper.getFolder(dstPath.getParent());
@@ -314,18 +231,12 @@ public final class BoxFileSystemDriver
      */
     // TODO: factorize code
     // TODO: far from being optimized
+    // TODO: metadata driver! Again
     @Override
     public void move(final Path source, final Path target,
-        final CopyOption... options)
+        final Set<CopyOption> options)
         throws IOException
     {
-        final Set<CopyOption> set = new HashSet<>();
-        Collections.addAll(set, options);
-
-        // TODO!
-        if (set.contains(StandardCopyOption.COPY_ATTRIBUTES))
-            throw new UnsupportedOperationException();
-
         /*
          * Check source validity; it must exist (obviously) and must not be a
          * non empty directory.
@@ -334,9 +245,8 @@ public final class BoxFileSystemDriver
         final String src = srcPath.toString();
         final BoxItem srcItem = wrapper.getItem(srcPath);
 
-        if (srcItem == null)
-            throw new NoSuchFileException(src);
-
+        // TODO: within a driver, atomic move of non empty directories are OK
+        @SuppressWarnings("ConstantConditions")
         final boolean directory = isDirectory(srcItem);
         if (directory)
             if (!wrapper.folderIsEmpty(asDirectory(srcItem)))
@@ -348,15 +258,11 @@ public final class BoxFileSystemDriver
          * replace it, check that it is either a file or a non empty directory.
          */
         final Path dstPath = target.toAbsolutePath();
-        final String dst = dstPath.toString();
         final BoxItem dstItem = wrapper.getItem(dstPath);
 
         //noinspection VariableNotUsedInsideIf
-        if (dstItem != null) {
-            if (!set.contains(StandardCopyOption.REPLACE_EXISTING))
-                throw new FileAlreadyExistsException(dst);
+        if (dstItem != null)
             wrapper.deleteItem(dstPath);
-        }
 
         // TODO: not checked whether dstPath is / here
         final BoxFolder parent = wrapper.getFolder(dstPath.getParent());
@@ -374,16 +280,6 @@ public final class BoxFileSystemDriver
         }
     }
 
-    /**
-     * Check access modes for a path on this filesystem
-     * <p>If no modes are provided to check for, this simply checks for the
-     * existence of the path.</p>
-     *
-     * @param path the path to check
-     * @param modes the modes to check for, if any
-     * @throws IOException filesystem level error, or a plain I/O error
-     * @see FileSystemProvider#checkAccess(Path, AccessMode...)
-     */
     @Override
     public void checkAccess(final Path path, final AccessMode... modes)
         throws IOException
@@ -394,10 +290,11 @@ public final class BoxFileSystemDriver
 
         if (item == null)
             throw new NoSuchFileException(s);
+
         final Set<AccessMode> set = EnumSet.noneOf(AccessMode.class);
         Collections.addAll(set, modes);
 
-        // TODO: access handling... But for now...
+        // TODO: access handling, metadata driver
         if (isFile(item) && set.contains(AccessMode.EXECUTE))
             throw new AccessDeniedException(s);
     }
