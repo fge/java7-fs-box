@@ -4,31 +4,48 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.FileStore;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.box.sdk.BoxAPIConnection;
-import com.box.sdk.BoxAPIConnectionListener;
 import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFolder;
-import com.github.fge.filesystem.box.driver.BoxAPIWrapper;
 import com.github.fge.filesystem.box.driver.BoxFileSystemDriver;
-import com.github.fge.filesystem.box.driver.DefaultBoxAPIWrapper;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.filestore.BoxFileStore;
 import com.github.fge.filesystem.driver.FileSystemDriver;
 import com.github.fge.filesystem.provider.FileSystemRepositoryBase;
 
+import vavi.net.auth.oauth2.BasicAppCredential;
+import vavi.net.auth.oauth2.box.BoxLocalOAuth2;
+import vavi.util.Debug;
+import vavi.util.properties.annotation.Property;
+import vavi.util.properties.annotation.PropsEntity;
+
 @ParametersAreNonnullByDefault
+@PropsEntity(url = "classpath:box.properties")
 public final class BoxFileSystemRepository
     extends FileSystemRepositoryBase
 {
-    private static final String ACCESS_TOKEN = "accessToken";
-
     public BoxFileSystemRepository()
     {
         super("box", new BoxFileSystemFactoryProvider());
+    }
+
+    /** should be {@link vavi.net.auth.oauth2.Authenticator} and have a constructor with args (String, String) */
+    @Property(value = "vavi.net.auth.oauth2.box.BoxLocalAuthenticator")
+    private String authenticatorClassName;
+
+    /* */
+    {
+        try {
+            PropsEntity.Util.bind(this);
+Debug.println("authenticatorClassName: " + authenticatorClassName);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Nonnull
@@ -37,23 +54,18 @@ public final class BoxFileSystemRepository
         final Map<String, ?> env)
         throws IOException
     {
-        final String accessToken = (String) env.get(ACCESS_TOKEN);
+        Map<String, String> params = getParamsMap(uri);
+        if (!params.containsKey(BoxFileSystemProvider.PARAM_ID)) {
+            throw new NoSuchElementException("uri not contains a param " + BoxFileSystemProvider.PARAM_ID);
+        }
+        final String email = params.get(BoxFileSystemProvider.PARAM_ID);
 
-        if (accessToken == null)
-            throw new IllegalArgumentException("access token not found");
+        if (!env.containsKey(BoxFileSystemProvider.ENV_CREDENTIAL)) {
+            throw new NoSuchElementException("app credential not contains a param " + BoxFileSystemProvider.ENV_CREDENTIAL);
+        }
+        BasicAppCredential appCredential = BasicAppCredential.class.cast(env.get(BoxFileSystemProvider.ENV_CREDENTIAL));
 
-        final BoxAPIConnection api = new BoxAPIConnection(accessToken);
-        api.addListener(new BoxAPIConnectionListener() {
-            @Override
-            public void onRefresh(BoxAPIConnection api) {
-                System.out.println("refresh tocken" + api.getRefreshToken());
-            }
-            @Override
-            public void onError(BoxAPIConnection api, BoxAPIException error) {
-                error.printStackTrace();
-            }
-        });
-        final BoxAPIWrapper wrapper = new DefaultBoxAPIWrapper(api);
+        final BoxAPIConnection api = new BoxLocalOAuth2(appCredential, authenticatorClassName).authorize(email);
         final FileStore store;
 
         try {
@@ -64,6 +76,6 @@ public final class BoxFileSystemRepository
             throw BoxIOException.wrap(e);
         }
 
-        return new BoxFileSystemDriver(store, factoryProvider, wrapper);
+        return new BoxFileSystemDriver(store, factoryProvider, api, env);
     }
 }

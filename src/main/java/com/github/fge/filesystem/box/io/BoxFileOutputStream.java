@@ -1,12 +1,5 @@
 package com.github.fge.filesystem.box.io;
 
-import com.box.sdk.BoxAPIException;
-import com.box.sdk.BoxFile;
-import com.box.sdk.BoxFolder;
-import com.github.fge.filesystem.box.exceptions.BoxIOException;
-import com.github.fge.filesystem.driver.FileSystemDriver;
-
-import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PipedInputStream;
@@ -22,6 +15,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
+
+import javax.annotation.ParametersAreNonnullByDefault;
+
+import com.box.sdk.BoxAPIException;
+import com.box.sdk.BoxFile;
+import com.box.sdk.BoxFile.Info;
+import com.box.sdk.BoxFolder;
+import com.github.fge.filesystem.box.exceptions.BoxIOException;
+import com.github.fge.filesystem.driver.FileSystemDriver;
 
 /**
  * Wrapper over a file upload over the box.com API
@@ -37,7 +40,8 @@ public final class BoxFileOutputStream
     extends OutputStream
 {
     private final PipedOutputStream out;
-    private final Future<Void> future;
+    private final Future<Info> future;
+    private Consumer<Info> consumer;
 
     /**
      * Build an output stream to upload content to an existing file
@@ -69,10 +73,10 @@ public final class BoxFileOutputStream
             throw exception;
         }
 
-        future = executor.submit(new Callable<Void>()
+        future = executor.submit(new Callable<Info>()
         {
             @Override
-            public Void call()
+            public Info call()
                 throws BoxIOException
             {
                 try {
@@ -100,12 +104,13 @@ public final class BoxFileOutputStream
      * @throws BoxIOException failed to initialize the object
      */
     public BoxFileOutputStream(final ExecutorService executor,
-        final BoxFolder parent, final String fileName)
+        final BoxFolder parent, final String fileName, Consumer<Info> consumer)
         throws BoxIOException
     {
         Objects.requireNonNull(executor);
         Objects.requireNonNull(parent);
         Objects.requireNonNull(fileName);
+        this.consumer = consumer;
 
         @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
         final PipedInputStream in = new PipedInputStream(16384);
@@ -123,15 +128,15 @@ public final class BoxFileOutputStream
             throw exception;
         }
 
-        future = executor.submit(new Callable<Void>()
+        future = executor.submit(new Callable<Info>()
         {
             @Override
-            public Void call()
+            public Info call()
                 throws BoxIOException
             {
                 try {
-                    parent.uploadFile(in, fileName);
-                    return null;
+                    Info info = parent.uploadFile(in, fileName);
+                    return info;
                 } catch (BoxAPIException e) {
                     final BoxIOException exception = BoxIOException.wrap(e);
                     try {
@@ -220,7 +225,8 @@ public final class BoxFileOutputStream
 
         try {
             // TODO: seems a little high; make that a copy option?
-            future.get(5L, TimeUnit.SECONDS);
+            Info info = future.get(5L, TimeUnit.SECONDS);
+            consumer.accept(info);
         } catch (InterruptedException e) {
             futureException = new BoxIOException("upload interrupted", e);
         } catch (ExecutionException e) {
