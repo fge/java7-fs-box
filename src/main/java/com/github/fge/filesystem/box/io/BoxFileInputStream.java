@@ -28,7 +28,7 @@ import java.util.concurrent.TimeoutException;
  * <p>Necessary to provide an {@link InputStream} for {@link
  * Files#newInputStream(Path, OpenOption...)}.</p>
  *
- * @see FileSystemDriver#newInputStream(Path, OpenOption...)
+ * @see FileSystemDriver#newInputStream(Path, java.util.Set)
  */
 @SuppressWarnings("ImplicitNumericConversion")
 @ParametersAreNonnullByDefault

@@ -17,13 +17,11 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -36,11 +34,9 @@ import java.util.concurrent.Executors;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import com.box.sdk.BoxAPIConnection;
 import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
-import com.box.sdk.BoxFolder.Info;
 import com.box.sdk.BoxItem;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.io.BoxFileInputStream;
@@ -67,49 +63,47 @@ public final class BoxFileSystemDriver
 {
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    private final BoxAPIConnection client;
     private boolean ignoreAppleDouble = false;
-    private final BoxFolder root;
+    private final BoxFolder.Info rootInfo;
 
     public BoxFileSystemDriver(final FileStore fileStore,
         final FileSystemFactoryProvider factoryProvider,
-        final BoxAPIConnection api,
+        final BoxFolder.Info rootInfo,
         final Map<String, ?> env)
     {
         super(fileStore, factoryProvider);
-        this.client = Objects.requireNonNull(api);
+        this.rootInfo = Objects.requireNonNull(rootInfo);
         ignoreAppleDouble = (Boolean) ((Map<String, Object>) env).getOrDefault("ignoreAppleDouble", Boolean.FALSE);
-        root = BoxFolder.getRootFolder(api);
     }
 
-    private static boolean isFolder(final BoxItem item)
+    private static boolean isFolder(final BoxItem.Info entry)
     {
-        return item instanceof BoxFolder;
+        return BoxFolder.Info.class.isInstance(entry);
     }
 
-    private static BoxFolder asFolder(final BoxItem item)
+    private static BoxFolder.Info asFolder(final BoxItem.Info entry)
     {
-        return (BoxFolder) item;
+        return BoxFolder.Info.class.cast(entry);
     }
 
-    private static boolean isFile(final BoxItem item)
+    private static boolean isFile(final BoxItem.Info entry)
     {
-        return item instanceof BoxFile;
+        return BoxFile.Info.class.isInstance(entry);
     }
 
-    private static BoxFile asFile(final BoxItem item)
+    private static BoxFile.Info asFile(final BoxItem.Info entry)
     {
-        return (BoxFile) item;
+        return BoxFile.Info.class.cast(entry);
     }
 
     /** */
-    private Cache<BoxItem> cache = new Cache<BoxItem>() {
+    private Cache<BoxItem.Info> cache = new Cache<BoxItem.Info>() {
         /**
          * TODO when the parent is not cached
          * @see #ignoreAppleDouble
          * @throws NoSuchFileException must be thrown when the path is not found in this cache
          */
-        public BoxItem getEntry(Path path) throws IOException {
+        public BoxItem.Info getEntry(Path path) throws IOException {
             if (cache.containsFile(path)) {
                 return cache.getFile(path);
             } else {
@@ -117,9 +111,9 @@ public final class BoxFileSystemDriver
                     throw new NoSuchFileException("ignore apple double file: " + path);
                 }
 
-                BoxItem entry;
+                BoxItem.Info entry;
                 if (path.getNameCount() == 0) {
-                    entry = root;
+                    entry = rootInfo;
                 } else {
                     entry = getItem(path);
                 }
@@ -132,8 +126,8 @@ public final class BoxFileSystemDriver
             }
         }
 
-        BoxItem getItem(final Path path) throws IOException {
-            BoxItem entry = null;
+        BoxItem.Info getItem(final Path path) throws IOException {
+            BoxItem.Info entry = null;
             for (int i = 0; i < path.getNameCount(); i++) {
                 Path name = path.getName(i);
                 Path sub = path.subpath(0, i + 1);
@@ -161,13 +155,13 @@ public final class BoxFileSystemDriver
         final Set<? extends OpenOption> options)
         throws IOException
     {
-        final BoxItem entry = cache.getEntry(path);
+        final BoxItem.Info entry = cache.getEntry(path);
 
         if (isFolder(entry)) {
             throw new IsDirectoryException(path.toString());
         }
 
-        return new BoxFileInputStream(executor, asFile(entry));
+        return new BoxFileInputStream(executor, asFile(entry).getResource());
     }
 
     @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
@@ -178,7 +172,7 @@ public final class BoxFileSystemDriver
         throws IOException
     {
         try {
-            BoxItem entry = cache.getEntry(path);
+            BoxItem.Info entry = cache.getEntry(path);
 
             if (isFolder(entry)) {
                 throw new IsDirectoryException(path.toString());
@@ -190,10 +184,10 @@ public final class BoxFileSystemDriver
 Debug.println("newOutputStream: " + e.getMessage());
         }
 
-        BoxItem parentEntry = cache.getEntry(path.getParent());
-        return new BoxFileOutputStream(executor, asFolder(parentEntry), toFilenameString(path), info -> {
+        BoxItem.Info parentEntry = cache.getEntry(path.getParent());
+        return new BoxFileOutputStream(executor, asFolder(parentEntry).getResource(), toFilenameString(path), newEntry -> {
             try {
-                cache.addEntry(path, BoxFile.class.cast(BoxItem.Info.class.cast(info).getResource()));
+                cache.addEntry(path, newEntry);
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
@@ -219,9 +213,9 @@ Debug.println("newOutputStream: " + e.getMessage());
                 protected long getLeftOver() throws IOException {
                     long leftover = 0;
                     if (options.contains(StandardOpenOption.APPEND)) {
-                        BoxItem entry = cache.getEntry(path);
-                        if (entry != null && asFile(entry).getInfo().getSize() >= 0) {
-                            leftover = asFile(entry).getInfo().getSize();
+                        BoxItem.Info entry = cache.getEntry(path);
+                        if (entry != null && entry.getSize() >= 0) {
+                            leftover = entry.getSize();
                         }
                     }
                     return leftover;
@@ -243,14 +237,14 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
                 }
             };
         } else {
-            BoxItem entry = cache.getEntry(path);
+            BoxItem.Info entry = cache.getEntry(path);
             if (isFolder(entry)) {
                 throw new NoSuchFileException(path.toString());
             }
             return new Util.SeekableByteChannelForReading(newInputStream(path, null)) {
                 @Override
                 protected long getSize() throws IOException {
-                    return asFile(entry).getInfo().getSize();
+                    return entry.getSize();
                 }
             };
         }
@@ -261,9 +255,9 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
         throws IOException
     {
         try {
-            final BoxItem parentEntry = cache.getEntry(dir.getParent());
-            Info info = asFolder(parentEntry).createFolder(toFilenameString(dir));
-            cache.addEntry(dir, info.getResource());
+            final BoxItem.Info parentEntry = cache.getEntry(dir.getParent());
+            BoxItem.Info newEntry = asFolder(parentEntry).getResource().createFolder(toFilenameString(dir));
+            cache.addEntry(dir, newEntry);
         } catch (BoxAPIException e) {
             throw BoxIOException.wrap(e);
         }
@@ -293,12 +287,12 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
 
     /**
      * Move a file, or empty directory, from one path to another on this
-     * filesystem
+     * file system
      *
      * @param source the source path
      * @param target the target path
      * @param options the copy options
-     * @throws IOException filesystem level error, or a plain I/O error
+     * @throws IOException file system level error, or a plain I/O error
      * @see FileSystemProvider#move(Path, Path, CopyOption...)
      */
     // TODO: factorize code
@@ -345,21 +339,43 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
     public void checkAccess(final Path path, final AccessMode... modes)
         throws IOException
     {
-        final BoxItem entry = cache.getEntry(path);
-        if (!isFile(entry))
-            return;
+        final BoxItem.Info entry = cache.getEntry(path);
 
         final Set<AccessMode> set = EnumSet.noneOf(AccessMode.class);
-        Collections.addAll(set, modes);
 
-        // TODO: access handling, metadata driver
-        if (set.contains(AccessMode.EXECUTE))
-            throw new AccessDeniedException(path.toString());
+        if (!isFile(entry)) {
+            return;
+        } else {
+            EnumSet<BoxFile.Permission> permissions = asFile(entry).getPermissions();
+            for (AccessMode mode : modes) {
+                switch (mode) {
+                case READ:
+                    if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
+                        set.add(AccessMode.READ);
+                    }
+                    break;
+                case WRITE:
+                    if (!permissions.contains(BoxFile.Permission.CAN_UPLOAD)) {
+                        set.add(AccessMode.WRITE);
+                    }
+                    break;
+                case EXECUTE:
+                    if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
+                        set.add(AccessMode.EXECUTE);
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (set.size() > 0) {
+            throw new AccessDeniedException(path.toString() + ": " + set);
+        }
     }
 
     @Nonnull
     @Override
-    public BoxItem getPathMetadata(final Path path)
+    public BoxItem.Info getPathMetadata(final Path path)
         throws IOException
     {
         // TODO: when symlinks are supported this may turn out to be wrong
@@ -382,7 +398,8 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
 
     /** */
     private List<Path> getDirectoryEntries(Path dir) throws IOException {
-        final BoxItem entry = cache.getEntry(dir);
+System.out.println("getDirectoryEntries: " + dir);
+        final BoxItem.Info entry = cache.getEntry(dir);
 
         if (!isFolder(entry)) {
 //System.err.println(entry.name + ", " + entry.id + ", " + entry.hashCode());
@@ -395,10 +412,10 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
         } else {
             list = new ArrayList<>();
 
-            for (final BoxItem.Info info : asFolder(entry).getChildren("name")) {
-                Path childPath = dir.resolve(info.getName());
+            for (final BoxItem.Info childEntry : asFolder(entry).getResource().getChildren("name", "size", "created_at", "modified_at", "permissions")) {
+                Path childPath = dir.resolve(childEntry.getName());
                 list.add(childPath);
-                cache.putFile(childPath, BoxItem.class.cast(info.getResource()));
+                cache.putFile(childPath, childEntry);
             }
             cache.putFolder(dir, list);
         }
@@ -408,14 +425,14 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
 
     /** */
     private void removeEntry(Path path) throws IOException {
-        BoxItem entry = cache.getEntry(path);
+        BoxItem.Info entry = cache.getEntry(path);
         if (isFolder(entry)) {
             if (cache.getChildCount(path) > 0) {
                 throw new DirectoryNotEmptyException(path.toString());
             }
-            asFolder(entry).delete(false);
+            asFolder(entry).getResource().delete(false);
         } else {
-            asFile(entry).delete();
+            asFile(entry).getResource().delete();
         }
 
         cache.removeEntry(path);
@@ -423,11 +440,11 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
 
     /** */
     private void copyEntry(final Path source, final Path target) throws IOException {
-        BoxItem sourceEntry = cache.getEntry(source);
+        BoxItem.Info sourceEntry = cache.getEntry(source);
         if (isFile(sourceEntry)) {
-            BoxItem parentEntry = cache.getEntry(source.getParent());
-            BoxItem.Info info = asFile(sourceEntry).copy(asFolder(parentEntry), toFilenameString(target));
-            cache.addEntry(target, BoxFile.class.cast(info.getResource()));
+            BoxItem.Info parentEntry = cache.getEntry(source.getParent());
+            BoxItem.Info newEntry = asFile(sourceEntry).getResource().copy(asFolder(parentEntry).getResource(), toFilenameString(target));
+            cache.addEntry(target, newEntry);
         } else if (isFolder(sourceEntry)) {
             // TODO java spec. allows empty folder
             throw new IsDirectoryException("source can not be a folder: " + source);
@@ -438,20 +455,20 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
      * @param targetIsParent if the target is folder
      */
     private void moveEntry(final Path source, final Path target, boolean targetIsParent) throws IOException {
-        BoxItem sourceEntry = cache.getEntry(source);
+        BoxItem.Info sourceEntry = cache.getEntry(source);
         if (isFile(sourceEntry)) {
-            BoxItem parentEntry = cache.getEntry(targetIsParent ? target : target.getParent());
-            BoxItem.Info info;
+            BoxItem.Info parentEntry = cache.getEntry(targetIsParent ? target : target.getParent());
+            BoxItem.Info patchedEntry;
             if (targetIsParent) {
-                info = asFile(sourceEntry).move(asFolder(parentEntry));
+                patchedEntry = asFile(sourceEntry).getResource().move(asFolder(parentEntry).getResource());
             } else {
-                info = asFile(sourceEntry).move(asFolder(parentEntry), toFilenameString(target));
+                patchedEntry = asFile(sourceEntry).getResource().move(asFolder(parentEntry).getResource(), toFilenameString(target));
             }
             cache.removeEntry(source);
             if (targetIsParent) {
-                cache.addEntry(target.resolve(source.getFileName()), BoxFile.class.cast(info.getResource()));
+                cache.addEntry(target.resolve(source.getFileName()), patchedEntry);
             } else {
-                cache.addEntry(target, BoxFile.class.cast(info.getResource()));
+                cache.addEntry(target, patchedEntry);
             }
         } else if (isFolder(sourceEntry)) {
             // TODO java spec. allows empty folder
@@ -461,12 +478,12 @@ System.out.println("SeekableByteChannelForWriting::close: scpecial: " + path);
 
     /** */
     private void renameEntry(final Path source, final Path target) throws IOException {
-        BoxItem sourceEntry = cache.getEntry(source);
+        BoxItem.Info sourceEntry = cache.getEntry(source);
 //Debug.println(sourceEntry.id + ", " + sourceEntry.name);
 
-        BoxItem parentEntry = cache.getEntry(target.getParent());
-        BoxItem.Info info = asFile(sourceEntry).move(asFolder(parentEntry), toFilenameString(target));
+        BoxItem.Info parentEntry = cache.getEntry(target.getParent());
+        BoxItem.Info patchedEntry = asFile(sourceEntry).getResource().move(asFolder(parentEntry).getResource(), toFilenameString(target));
         cache.removeEntry(source);
-        cache.addEntry(target, BoxFile.class.cast(info.getResource()));
+        cache.addEntry(target, patchedEntry);
     }
 }

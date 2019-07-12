@@ -21,8 +21,8 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
-import com.box.sdk.BoxFile.Info;
 import com.box.sdk.BoxFolder;
+import com.box.sdk.BoxItem;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.driver.FileSystemDriver;
 
@@ -33,15 +33,15 @@ import com.github.fge.filesystem.driver.FileSystemDriver;
  * file (this is why there are two constructors).</p>
  *
  * @see Files#newOutputStream(Path, OpenOption...)
- * @see FileSystemDriver#newOutputStream(Path, OpenOption...)
+ * @see FileSystemDriver#newOutputStream(Path, java.util.Set)
  */
 @ParametersAreNonnullByDefault
 public final class BoxFileOutputStream
     extends OutputStream
 {
     private final PipedOutputStream out;
-    private final Future<Info> future;
-    private Consumer<Info> consumer;
+    private final Future<BoxItem.Info> future;
+    private Consumer<BoxItem.Info> consumer;
 
     /**
      * Build an output stream to upload content to an existing file
@@ -73,10 +73,10 @@ public final class BoxFileOutputStream
             throw exception;
         }
 
-        future = executor.submit(new Callable<Info>()
+        future = executor.submit(new Callable<BoxItem.Info>()
         {
             @Override
-            public Info call()
+            public BoxItem.Info call()
                 throws BoxIOException
             {
                 try {
@@ -104,7 +104,7 @@ public final class BoxFileOutputStream
      * @throws BoxIOException failed to initialize the object
      */
     public BoxFileOutputStream(final ExecutorService executor,
-        final BoxFolder parent, final String fileName, Consumer<Info> consumer)
+        final BoxFolder parent, final String fileName, Consumer<BoxItem.Info> consumer)
         throws BoxIOException
     {
         Objects.requireNonNull(executor);
@@ -128,14 +128,14 @@ public final class BoxFileOutputStream
             throw exception;
         }
 
-        future = executor.submit(new Callable<Info>()
+        future = executor.submit(new Callable<BoxItem.Info>()
         {
             @Override
-            public Info call()
+            public BoxItem.Info call()
                 throws BoxIOException
             {
                 try {
-                    Info info = parent.uploadFile(in, fileName);
+                    BoxItem.Info info = parent.uploadFile(in, fileName);
                     return info;
                 } catch (BoxAPIException e) {
                     final BoxIOException exception = BoxIOException.wrap(e);
@@ -225,7 +225,7 @@ public final class BoxFileOutputStream
 
         try {
             // TODO: seems a little high; make that a copy option?
-            Info info = future.get(5L, TimeUnit.SECONDS);
+            BoxItem.Info info = future.get(5L, TimeUnit.SECONDS);
             consumer.accept(info);
         } catch (InterruptedException e) {
             futureException = new BoxIOException("upload interrupted", e);

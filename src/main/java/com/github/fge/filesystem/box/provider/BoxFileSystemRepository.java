@@ -65,17 +65,16 @@ Debug.println("authenticatorClassName: " + authenticatorClassName);
         }
         BasicAppCredential appCredential = BasicAppCredential.class.cast(env.get(BoxFileSystemProvider.ENV_CREDENTIAL));
 
-        final BoxAPIConnection api = new BoxLocalOAuth2(appCredential, authenticatorClassName).authorize(email);
-        final FileStore store;
-
         try {
-            final BoxFolder root = BoxFolder.getRootFolder(api);
-            store = new BoxFileStore(root.getInfo(),
+            final BoxAPIConnection api = new BoxLocalOAuth2(appCredential, authenticatorClassName).authorize(email);
+
+            final BoxFolder.Info rootInfo = BoxFolder.getRootFolder(api).getInfo();
+            final FileStore store = new BoxFileStore(rootInfo,
                 factoryProvider.getAttributesFactory());
+
+            return new BoxFileSystemDriver(store, factoryProvider, rootInfo, env);
         } catch (BoxAPIException e) {
             throw BoxIOException.wrap(e);
         }
-
-        return new BoxFileSystemDriver(store, factoryProvider, api, env);
     }
 }

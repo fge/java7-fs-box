@@ -20,24 +20,24 @@ import com.github.fge.filesystem.attributes.provider.BasicFileAttributesProvider
 public final class BoxBasicFileAttributesProvider
     extends BasicFileAttributesProvider implements PosixFileAttributes
 {
-    private final BoxItem entry;
+    private final BoxItem.Info entry;
 
-    public BoxBasicFileAttributesProvider(final BoxItem item)
+    public BoxBasicFileAttributesProvider(final BoxItem.Info entry)
         throws IOException
     {
-        this.entry = item;
+        this.entry = entry;
     }
 
     @Override
     public FileTime lastModifiedTime()
-    {try {
-        return entry.getInfo().getModifiedAt() != null ? FileTime.fromMillis(entry.getInfo().getModifiedAt().getTime()) : creationTime();
-    } catch (NullPointerException e) {System.err.println("info: "+ entry.getInfo() + ", info.getModifiedAt(): " + entry.getInfo().getModifiedAt());throw e;}}
+    {
+        return entry.getModifiedAt() != null ? FileTime.fromMillis(entry.getModifiedAt().getTime()) : creationTime();
+    }
 
     @Override
     public FileTime creationTime()
     {
-        return entry.getInfo().getCreatedAt() != null ? FileTime.fromMillis(entry.getInfo().getCreatedAt().getTime()) : FileTime.fromMillis(0);
+        return entry.getCreatedAt() != null ? FileTime.fromMillis(entry.getCreatedAt().getTime()) : FileTime.fromMillis(0);
     }
 
     /**
@@ -46,7 +46,7 @@ public final class BoxBasicFileAttributesProvider
     @Override
     public boolean isRegularFile()
     {
-        return BoxFile.class.isInstance(entry);
+        return BoxFile.Info.class.isInstance(entry);
     }
 
     /**
@@ -55,7 +55,7 @@ public final class BoxBasicFileAttributesProvider
     @Override
     public boolean isDirectory()
     {
-        return BoxFolder.class.isInstance(entry);
+        return BoxFolder.Info.class.isInstance(entry);
     }
 
     /**
@@ -70,7 +70,7 @@ public final class BoxBasicFileAttributesProvider
     @Override
     public long size()
     {
-        return entry.getInfo().getSize();
+        return entry.getSize();
     }
 
     /* @see java.nio.file.attribute.PosixFileAttributes#owner() */
