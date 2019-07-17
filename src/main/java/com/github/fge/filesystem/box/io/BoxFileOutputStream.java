@@ -57,7 +57,6 @@ public final class BoxFileOutputStream
         Objects.requireNonNull(executor);
         Objects.requireNonNull(file);
 
-        @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
         final PipedInputStream in = new PipedInputStream(16384);
 
         try {
@@ -80,7 +79,7 @@ public final class BoxFileOutputStream
                 throws BoxIOException
             {
                 try {
-                    file.uploadVersion(in);
+                    file.uploadNewVersion(in);
                     return null;
                 } catch (BoxAPIException e) {
                     final BoxIOException exception = BoxIOException.wrap(e);
@@ -112,7 +111,6 @@ public final class BoxFileOutputStream
         Objects.requireNonNull(fileName);
         this.consumer = consumer;
 
-        @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
         final PipedInputStream in = new PipedInputStream(16384);
 
         try {

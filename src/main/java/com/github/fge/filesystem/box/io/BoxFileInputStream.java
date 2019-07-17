@@ -30,7 +30,6 @@ import java.util.concurrent.TimeoutException;
  *
  * @see FileSystemDriver#newInputStream(Path, java.util.Set)
  */
-@SuppressWarnings("ImplicitNumericConversion")
 @ParametersAreNonnullByDefault
 public final class BoxFileInputStream
     extends InputStream

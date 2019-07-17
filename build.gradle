@@ -45,7 +45,7 @@ apply(plugin: "propdeps-eclipse");
 apply(plugin: "info.solidsoft.pitest");
 
 group = "com.github.fge";
-version = "0.1.0v";
+version = "0.1.1v";
 description = "FileSystem implementation over box.com";
 sourceCompatibility = "1.8";
 targetCompatibility = "1.8"; // defaults to sourceCompatibility

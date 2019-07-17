@@ -56,7 +56,6 @@ import static vavi.nio.file.Util.toPathString;
  * Box filesystem driver
  *
  */
-@SuppressWarnings("OverloadedVarargsMethod")
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemDriver
     extends UnixLikeFileSystemDriverBase
@@ -66,6 +65,7 @@ public final class BoxFileSystemDriver
     private boolean ignoreAppleDouble = false;
     private final BoxFolder.Info rootInfo;
 
+    @SuppressWarnings("unchecked")
     public BoxFileSystemDriver(final FileStore fileStore,
         final FileSystemFactoryProvider factoryProvider,
         final BoxFolder.Info rootInfo,
@@ -164,7 +164,6 @@ public final class BoxFileSystemDriver
         return new BoxFileInputStream(executor, asFile(entry).getResource());
     }
 
-    @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
     @Nonnull
     @Override
     public OutputStream newOutputStream(final Path path,
