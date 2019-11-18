@@ -1,4 +1,4 @@
-[![Release](https://jitpack.io/v/umjammer/java7-fs-box.svg)](https://jitpack.io/#umjammer/java7-fs-box)
+[![Release](https://jitpack.io/v/umjammer/java7-fs-box.svg)](https://jitpack.io/#umjammer/java7-fs-box) [![Actions Status](https://github.com/umjammer/java7-fs-box/workflows/Java%20CI/badge.svg)](https://github.com/umjammer/java7-fs-box/actions)
 
 ## java7-fs-box
 
