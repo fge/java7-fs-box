@@ -15,25 +15,58 @@ Note that it does not make use of the Android SDK (see
 [here](https://github.com/box/box-java-sdk-v2) but of the [new
 API](https://github.com/box/box-java-sdk).
 
-## Status
+## Install
 
-In active development.
+### jars
 
-The basic I/O operations work: you can download and upload files, create and delete entries, and a
-few other things.
+https://jitpack.io/#umjammer/java7-fs-box
 
-The status is as of yet unclear and highly tied to java7-fs-base, so please refer to this project
-for more details.
+### selenium chrome driver
 
-## Building
+Download the chromedriver executable from https://chromedriver.chromium.org/downloads and locate it into some directory.
 
-Right now, this project uses the latest HEAD of java7-fs-base. You therefore need to clone it (see
-link above), then build and install it in your local maven repo using:
+Don't forget to run jvm with jvm argument `-Dwebdriver.chrome.driver=/usr/local/bin/chromedriver`.
 
+## Usage
+
+First, get box account, then create [box app](https://app.box.com/developers/console).
+
+Next, prepare 2 property files.
+
+```shell
+$ cat ${HOME}/.vavifuse/box.properties
+box.clientId=your_client_id
+box.clientSecret=your_client_secret
+box.redirectUrl=http://localhost:30001
 ```
-# Replace ./gradlew with gradlew.bat if you run Windows
-./gradlew clean test install
+
+```shell
+$ cat ${HOME}/.vavifuse/credentials.properties
+box.password.xxx@yyy.zzz=your_password
 ```
 
-Then clone this project.
+Then write your code! Here is a short example (imports omitted for brevity):
 
+```java
+public class Main {
+
+    public static void main(final String... args) throws IOException {
+        String email = "xxx@yyy.zzz";
+
+        URI uri = URI.create("box:///?id=" + email);
+
+        BasicAppCredential appCredential = new BoxLocalAppCredential();
+        PropsEntity.Util.bind(appCredential);
+
+        Map<String, Object> env = new HashMap<>();
+        env.put(BoxFileSystemProvider.ENV_CREDENTIAL, appCredential);
+
+        FileSystem fs = FileSystems.newFileSystem(uri, env);
+            :
+    }
+}
+```
+
+### See also
+
+https://github.com/umjammer/vavi-apps-fuse/blob/master/src/test/java/vavi/nio/file/box/Main.java
