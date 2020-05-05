@@ -5,28 +5,24 @@ import java.net.URI;
 import java.nio.file.FileStore;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.logging.Level;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.box.sdk.BoxAPIConnection;
-import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFolder;
 import com.github.fge.filesystem.box.driver.BoxFileSystemDriver;
-import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.filestore.BoxFileStore;
 import com.github.fge.filesystem.driver.FileSystemDriver;
 import com.github.fge.filesystem.provider.FileSystemRepositoryBase;
 
 import vavi.net.auth.oauth2.BasicAppCredential;
-import vavi.net.auth.oauth2.box.BoxLocalOAuth2;
-import vavi.util.Debug;
-import vavi.util.properties.annotation.Property;
-import vavi.util.properties.annotation.PropsEntity;
+import vavi.net.auth.oauth2.UserCredential;
+import vavi.net.auth.oauth2.box.BoxLocalAppCredential;
+import vavi.net.auth.oauth2.box.BoxLocalUserCredential;
+import vavi.net.auth.oauth2.box.BoxOAuth2;
 
 @ParametersAreNonnullByDefault
-@PropsEntity(url = "classpath:box.properties")
 public final class BoxFileSystemRepository
     extends FileSystemRepositoryBase
 {
@@ -35,48 +31,45 @@ public final class BoxFileSystemRepository
         super("box", new BoxFileSystemFactoryProvider());
     }
 
-    /** should be {@link vavi.net.auth.oauth2.Authenticator} and have a constructor with args (String, String) */
-    @Property(value = "vavi.net.auth.oauth2.box.BoxLocalAuthenticator")
-    private String authenticatorClassName;
-
-    /* */
-    {
-        try {
-            PropsEntity.Util.bind(this);
-Debug.println("authenticatorClassName: " + authenticatorClassName);
-        } catch (Exception e) {
-Debug.println(Level.WARNING, "no box.properties in classpath, use defaut");
-            authenticatorClassName = "vavi.net.auth.oauth2.box.BoxLocalAuthenticator";
-        }
-    }
-
     @Nonnull
     @Override
     public FileSystemDriver createDriver(final URI uri,
         final Map<String, ?> env)
         throws IOException
     {
+        // 1. user credential
+        UserCredential userCredential = null;
+
         Map<String, String> params = getParamsMap(uri);
-        if (!params.containsKey(BoxFileSystemProvider.PARAM_ID)) {
-            throw new NoSuchElementException("uri not contains a param " + BoxFileSystemProvider.PARAM_ID);
+        if (params.containsKey(BoxFileSystemProvider.PARAM_ID)) {
+            String email = params.get(BoxFileSystemProvider.PARAM_ID);
+            userCredential = new BoxLocalUserCredential(email);
         }
-        final String email = params.get(BoxFileSystemProvider.PARAM_ID);
 
-        if (!env.containsKey(BoxFileSystemProvider.ENV_CREDENTIAL)) {
-            throw new NoSuchElementException("app credential not contains a param " + BoxFileSystemProvider.ENV_CREDENTIAL);
+        if (env.containsKey(BoxFileSystemProvider.ENV_USER_CREDENTIAL)) {
+            userCredential = UserCredential.class.cast(env.get(BoxFileSystemProvider.ENV_USER_CREDENTIAL));
         }
-        BasicAppCredential appCredential = BasicAppCredential.class.cast(env.get(BoxFileSystemProvider.ENV_CREDENTIAL));
 
-        try {
-            final BoxAPIConnection api = new BoxLocalOAuth2(appCredential, authenticatorClassName).authorize(email);
-
-            final BoxFolder.Info rootInfo = BoxFolder.getRootFolder(api).getInfo();
-            final FileStore store = new BoxFileStore(rootInfo,
-                factoryProvider.getAttributesFactory());
-
-            return new BoxFileSystemDriver(store, factoryProvider, rootInfo, env);
-        } catch (BoxAPIException e) {
-            throw BoxIOException.wrap(e);
+        if (userCredential == null) {
+            throw new NoSuchElementException("uri not contains a param " + BoxFileSystemProvider.PARAM_ID + " nor " +
+                                             "env not contains a param " + BoxFileSystemProvider.ENV_USER_CREDENTIAL);
         }
+
+        // 2. app credential
+        BasicAppCredential appCredential = null;
+
+        if (env.containsKey(BoxFileSystemProvider.ENV_APP_CREDENTIAL)) {
+            appCredential = BasicAppCredential.class.cast(env.get(BoxFileSystemProvider.ENV_APP_CREDENTIAL));
+        }
+
+        if (appCredential == null) {
+            appCredential = new BoxLocalAppCredential(); // TODO use prop
+        }
+
+        // 3. process
+        final BoxAPIConnection api = new BoxOAuth2(appCredential).authorize(userCredential);
+        final BoxFolder.Info rootInfo = BoxFolder.getRootFolder(api).getInfo();
+        final FileStore store = new BoxFileStore(rootInfo, factoryProvider.getAttributesFactory());
+        return new BoxFileSystemDriver(store, factoryProvider, rootInfo, env);
     }
 }

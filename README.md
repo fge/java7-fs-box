@@ -55,12 +55,6 @@ public class Main {
 
         URI uri = URI.create("box:///?id=" + email);
 
-        BasicAppCredential appCredential = new BoxLocalAppCredential();
-        PropsEntity.Util.bind(appCredential);
-
-        Map<String, Object> env = new HashMap<>();
-        env.put(BoxFileSystemProvider.ENV_CREDENTIAL, appCredential);
-
         FileSystem fs = FileSystems.newFileSystem(uri, env);
             :
     }
