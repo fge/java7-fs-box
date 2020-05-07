@@ -40,14 +40,14 @@ public final class BoxFileSystemRepository
         // 1. user credential
         UserCredential userCredential = null;
 
-        Map<String, String> params = getParamsMap(uri);
-        if (params.containsKey(BoxFileSystemProvider.PARAM_ID)) {
-            String email = params.get(BoxFileSystemProvider.PARAM_ID);
-            userCredential = new BoxLocalUserCredential(email);
-        }
-
         if (env.containsKey(BoxFileSystemProvider.ENV_USER_CREDENTIAL)) {
             userCredential = UserCredential.class.cast(env.get(BoxFileSystemProvider.ENV_USER_CREDENTIAL));
+        }
+
+        Map<String, String> params = getParamsMap(uri);
+        if (userCredential == null && params.containsKey(BoxFileSystemProvider.PARAM_ID)) {
+            String email = params.get(BoxFileSystemProvider.PARAM_ID);
+            userCredential = new BoxLocalUserCredential(email);
         }
 
         if (userCredential == null) {
