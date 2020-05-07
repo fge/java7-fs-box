@@ -33,12 +33,16 @@ First, get box account, then create [box app](https://app.box.com/developers/con
 
 Next, prepare 2 property files.
 
+ * application credential
+
 ```shell
 $ cat ${HOME}/.vavifuse/box.properties
 box.clientId=your_client_id
 box.clientSecret=your_client_secret
 box.redirectUrl=http://localhost:30001
 ```
+
+ * user credential
 
 ```shell
 $ cat ${HOME}/.vavifuse/credentials.properties
