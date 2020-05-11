@@ -7,6 +7,12 @@
   <artifactId>java7-fs-box</artifactId>
   <version>0.1.5v</version>
 
+  <name>java7-fs-box</name>
+  <scm>
+    <url>https://github.com/umjammer/java7-fs-box</url>
+  </scm>
+  <url>https://github.com/umjammer/java7-fs-box</url>
+
   <profiles>
     <profile>
       <id>local (not on CI)</id>
