@@ -16,11 +16,11 @@ import com.github.fge.filesystem.box.filestore.BoxFileStore;
 import com.github.fge.filesystem.driver.FileSystemDriver;
 import com.github.fge.filesystem.provider.FileSystemRepositoryBase;
 
-import vavi.net.auth.oauth2.BasicAppCredential;
-import vavi.net.auth.oauth2.UserCredential;
+import vavi.net.auth.UserCredential;
+import vavi.net.auth.oauth2.OAuth2AppCredential;
 import vavi.net.auth.oauth2.box.BoxLocalAppCredential;
-import vavi.net.auth.oauth2.box.BoxLocalUserCredential;
 import vavi.net.auth.oauth2.box.BoxOAuth2;
+import vavi.net.auth.web.box.BoxLocalUserCredential;
 
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemRepository
@@ -56,10 +56,10 @@ public final class BoxFileSystemRepository
         }
 
         // 2. app credential
-        BasicAppCredential appCredential = null;
+        OAuth2AppCredential appCredential = null;
 
         if (env.containsKey(BoxFileSystemProvider.ENV_APP_CREDENTIAL)) {
-            appCredential = BasicAppCredential.class.cast(env.get(BoxFileSystemProvider.ENV_APP_CREDENTIAL));
+            appCredential = OAuth2AppCredential.class.cast(env.get(BoxFileSystemProvider.ENV_APP_CREDENTIAL));
         }
 
         if (appCredential == null) {

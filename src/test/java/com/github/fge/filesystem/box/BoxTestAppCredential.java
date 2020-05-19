@@ -6,8 +6,8 @@
 
 package com.github.fge.filesystem.box;
 
-import vavi.net.auth.oauth2.BaseLocalAppCredential;
-import vavi.net.auth.oauth2.BasicAppCredential;
+import vavi.net.auth.BaseLocalAppCredential;
+import vavi.net.auth.oauth2.OAuth2AppCredential;
 import vavi.util.properties.annotation.Env;
 import vavi.util.properties.annotation.PropsEntity;
 
@@ -27,7 +27,7 @@ import vavi.util.properties.annotation.PropsEntity;
  * @see "https://app.box.com/developers/console"
  */
 @PropsEntity
-public class BoxTestAppCredential extends BaseLocalAppCredential implements BasicAppCredential {
+public class BoxTestAppCredential extends BaseLocalAppCredential implements OAuth2AppCredential {
 
     @Env(name = "TEST_CLIENT_ID")
     private transient String clientId;
