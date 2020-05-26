@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 
 import com.github.fge.filesystem.box.provider.BoxFileSystemProvider;
 
@@ -25,7 +26,18 @@ import static vavi.nio.file.Base.testAll;
  */
 class Test1 {
 
+    /**
+     * environment variable
+     * <ul>
+     * <li> TEST_ACCOUNT
+     * <li> TEST_PASSWORD
+     * <li> TEST_CLIENT_ID
+     * <li> TEST_CLIENT_SECRET
+     * <li> TEST_REDIRECT_URL
+     * </ul>
+     */
     @Test
+    @DisabledIfEnvironmentVariable(named = "GITHUB_WORKFLOW", matches = ".*")
     void test01() throws Exception {
         String email = System.getenv("TEST_ACCOUNT");
 
@@ -36,6 +48,26 @@ class Test1 {
         URI uri = URI.create("box:///");
 
         testAll(new BoxFileSystemProvider().newFileSystem(uri, env));
+    }
+
+    /**
+     * environment variable
+     * <ul>
+     * <li> TEST_DEVELOPER_TOKEN
+     * </ul>
+     */
+    @Test
+    void test02() throws Exception {
+        System.setProperty("oAuth2ClassName", "com.github.fge.filesystem.box.BoxDevOAuth2");
+
+        Map<String, Object> env = new HashMap<>();
+        env.put(BoxFileSystemProvider.ENV_APP_CREDENTIAL, new BoxTestAppCredential()); // dummy
+
+        URI uri = URI.create("box:///?id=dummy");
+
+        testAll(new BoxFileSystemProvider().newFileSystem(uri, env));
+
+        System.setProperty("oAuth2ClassName", "");
     }
 }
 

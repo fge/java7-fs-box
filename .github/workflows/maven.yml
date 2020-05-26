@@ -20,5 +20,6 @@ jobs:
         TEST_CLIENT_ID : ${{ secrets.TEST_CLIENT_ID }}
         TEST_CLIENT_SECRET : ${{ secrets.TEST_CLIENT_SECRET }}
         TEST_REDIRECT_URL : ${{ secrets.TEST_REDIRECT_URL }}
+        TEST_DEVELOPER_TOKEN : ${{ secrets.TEST_DEVELOPER_TOKEN }}
       run: |
-        mvn -B package --file pom.xml -Dmaven.test.skip=true
+        mvn -B package --file pom.xml

@@ -68,3 +68,7 @@ public class Main {
 ### See also
 
 https://github.com/umjammer/vavi-apps-fuse/blob/master/src/test/java/vavi/nio/file/box/Main.java
+
+## TODO
+
+  * ~~dev token authenticator~~

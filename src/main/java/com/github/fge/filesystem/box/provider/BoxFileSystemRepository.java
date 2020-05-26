@@ -1,6 +1,7 @@
 package com.github.fge.filesystem.box.provider;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.nio.file.FileStore;
 import java.util.Map;
@@ -17,15 +18,21 @@ import com.github.fge.filesystem.driver.FileSystemDriver;
 import com.github.fge.filesystem.provider.FileSystemRepositoryBase;
 
 import vavi.net.auth.UserCredential;
+import vavi.net.auth.oauth2.OAuth2;
 import vavi.net.auth.oauth2.OAuth2AppCredential;
 import vavi.net.auth.oauth2.box.BoxLocalAppCredential;
-import vavi.net.auth.oauth2.box.BoxOAuth2;
 import vavi.net.auth.web.box.BoxLocalUserCredential;
+import vavi.util.properties.annotation.Property;
+import vavi.util.properties.annotation.PropsEntity;
 
 @ParametersAreNonnullByDefault
+@PropsEntity(useSystem = true)
 public final class BoxFileSystemRepository
     extends FileSystemRepositoryBase
 {
+    @Property("vavi.net.auth.oauth2.box.BoxOAuth2")
+    private String oAuth2ClassName;
+
     public BoxFileSystemRepository()
     {
         super("box", new BoxFileSystemFactoryProvider());
@@ -67,9 +74,21 @@ public final class BoxFileSystemRepository
         }
 
         // 3. process
-        final BoxAPIConnection api = new BoxOAuth2(appCredential).authorize(userCredential);
+        PropsEntity.Util.bind(this);
+        final BoxAPIConnection api = getOAuth2(appCredential).authorize(userCredential);
         final BoxFolder.Info rootInfo = BoxFolder.getRootFolder(api).getInfo();
         final FileStore store = new BoxFileStore(rootInfo, factoryProvider.getAttributesFactory());
         return new BoxFileSystemDriver(store, factoryProvider, rootInfo, env);
+    }
+
+    /** */
+    private OAuth2<UserCredential, BoxAPIConnection> getOAuth2(OAuth2AppCredential appCredential) {
+        try {
+            return OAuth2.class.cast(Class.forName(oAuth2ClassName)
+                                     .getDeclaredConstructor(OAuth2AppCredential.class).newInstance(appCredential));
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException |
+                 InvocationTargetException | NoSuchMethodException | SecurityException | ClassNotFoundException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }
