@@ -61,7 +61,8 @@ class Test1 {
         System.setProperty("oAuth2ClassName", "com.github.fge.filesystem.box.BoxDevOAuth2");
 
         Map<String, Object> env = new HashMap<>();
-        env.put(BoxFileSystemProvider.ENV_APP_CREDENTIAL, new BoxTestAppCredential()); // dummy
+        env.put(BoxFileSystemProvider.ENV_APP_CREDENTIAL, new DummyAppCredential());
+        env.put(BoxFileSystemProvider.ENV_USER_CREDENTIAL, new DummyUserCredential());
 
         URI uri = URI.create("box:///?id=dummy");
 
