@@ -19,13 +19,12 @@ API](https://github.com/box/box-java-sdk).
 
 ### jars
 
-https://jitpack.io/#umjammer/java7-fs-box
+ * https://jitpack.io/#umjammer/java7-fs-box
 
 ### selenium chrome driver
 
-Download the [chromedriver executable](https://chromedriver.chromium.org/downloads) and locate it into some directory.
-
-Don't forget to run jvm with jvm argument `-Dwebdriver.chrome.driver=/usr/local/bin/chromedriver`.
+ * Download the [chromedriver executable](https://chromedriver.chromium.org/downloads) and locate it into some directory.
+   * Don't forget to run jvm with jvm argument `-Dwebdriver.chrome.driver=/usr/local/bin/chromedriver`.
 
 ## Usage
 

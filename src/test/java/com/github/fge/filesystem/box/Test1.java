@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import com.github.fge.filesystem.box.provider.BoxFileSystemProvider;
 
@@ -55,8 +56,10 @@ class Test1 {
      * <ul>
      * <li> TEST_DEVELOPER_TOKEN
      * </ul>
+     * @see "https://app.box.com/developers/console/app/216798/configuration"
      */
     @Test
+    @EnabledIfEnvironmentVariable(named = "TEST_DEVELOPER_TOKEN", matches = ".+")
     void test02() throws Exception {
         System.setProperty("oAuth2ClassName", "com.github.fge.filesystem.box.BoxDevOAuth2");
 
