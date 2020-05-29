@@ -28,8 +28,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -39,8 +37,7 @@ import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
-import com.github.fge.filesystem.box.io.BoxFileInputStream;
-import com.github.fge.filesystem.box.io.BoxFileOutputStream;
+import com.github.fge.filesystem.box.io.BoxUtil;
 import com.github.fge.filesystem.driver.UnixLikeFileSystemDriverBase;
 import com.github.fge.filesystem.exceptions.IsDirectoryException;
 import com.github.fge.filesystem.provider.FileSystemFactoryProvider;
@@ -60,8 +57,6 @@ import static vavi.nio.file.Util.toPathString;
 public final class BoxFileSystemDriver
     extends UnixLikeFileSystemDriverBase
 {
-    private final ExecutorService executor = Executors.newCachedThreadPool();
-
     private boolean ignoreAppleDouble = false;
     private final BoxFolder.Info rootInfo;
 
@@ -161,7 +156,7 @@ public final class BoxFileSystemDriver
             throw new IsDirectoryException(path.toString());
         }
 
-        return new BoxFileInputStream(executor, asFile(entry).getResource());
+        return BoxUtil.getInputStreamForDownload(asFile(entry).getResource());
     }
 
     @Nonnull
@@ -184,7 +179,7 @@ Debug.println("newOutputStream: " + e.getMessage());
         }
 
         BoxItem.Info parentEntry = cache.getEntry(path.getParent());
-        return new BoxFileOutputStream(executor, asFolder(parentEntry).getResource(), toFilenameString(path), newEntry -> {
+        return BoxUtil.getOutputStreamForUpload(asFolder(parentEntry).getResource(), toFilenameString(path), newEntry -> {
             try {
                 cache.addEntry(path, newEntry);
             } catch (IOException e) {
