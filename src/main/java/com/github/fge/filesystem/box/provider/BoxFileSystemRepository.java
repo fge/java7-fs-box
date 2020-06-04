@@ -30,7 +30,7 @@ import vavi.util.properties.annotation.PropsEntity;
 public final class BoxFileSystemRepository
     extends FileSystemRepositoryBase
 {
-    @Property("vavi.net.auth.oauth2.box.BoxOAuth2")
+    @Property(name = "vavi.nio.file.box.BoxFileSystemRepository.oauth2", value = "vavi.net.auth.oauth2.box.BoxOAuth2")
     private String oAuth2ClassName;
 
     public BoxFileSystemRepository()

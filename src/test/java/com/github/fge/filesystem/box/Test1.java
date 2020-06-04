@@ -61,7 +61,7 @@ class Test1 {
     @Test
     @EnabledIfEnvironmentVariable(named = "TEST_DEVELOPER_TOKEN", matches = ".+")
     void test02() throws Exception {
-        System.setProperty("oAuth2ClassName", "com.github.fge.filesystem.box.BoxDevOAuth2");
+        System.setProperty("vavi.nio.file.box.BoxFileSystemRepository.oauth2", "com.github.fge.filesystem.box.BoxDevOAuth2");
 
         Map<String, Object> env = new HashMap<>();
         env.put(BoxFileSystemProvider.ENV_APP_CREDENTIAL, new DummyAppCredential());
