@@ -148,7 +148,7 @@ public final class BoxFileSystemDriver
                 if (!found.isPresent()) {
                     return null;
                 } else {
-                    entry = getEntry(found.get());
+                    entry = getFile(found.get());
                 }
             }
             return entry;
