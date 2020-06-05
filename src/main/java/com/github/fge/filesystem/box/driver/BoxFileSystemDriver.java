@@ -350,23 +350,25 @@ Debug.println("uploading... : " + path);
             return;
         } else {
             EnumSet<BoxFile.Permission> permissions = asFile(entry).getPermissions();
-            for (AccessMode mode : modes) {
-                switch (mode) {
-                case READ:
-                    if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
-                        set.add(AccessMode.READ);
+            if (permissions != null) {
+                for (AccessMode mode : modes) {
+                    switch (mode) {
+                    case READ:
+                        if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
+                            set.add(AccessMode.READ);
+                        }
+                        break;
+                    case WRITE:
+                        if (!permissions.contains(BoxFile.Permission.CAN_UPLOAD)) {
+                            set.add(AccessMode.WRITE);
+                        }
+                        break;
+                    case EXECUTE:
+                        if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
+                            set.add(AccessMode.EXECUTE);
+                        }
+                        break;
                     }
-                    break;
-                case WRITE:
-                    if (!permissions.contains(BoxFile.Permission.CAN_UPLOAD)) {
-                        set.add(AccessMode.WRITE);
-                    }
-                    break;
-                case EXECUTE:
-                    if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
-                        set.add(AccessMode.EXECUTE);
-                    }
-                    break;
                 }
             }
         }
