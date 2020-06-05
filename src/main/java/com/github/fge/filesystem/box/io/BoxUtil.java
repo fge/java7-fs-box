@@ -6,6 +6,8 @@
 
 package com.github.fge.filesystem.box.io;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -58,12 +60,12 @@ public class BoxUtil {
         URL url = BoxFile.CONTENT_URL_TEMPLATE.build(file.getAPI().getBaseURL(), file.getID());
         BoxAPIRequest request = new BoxAPIRequest(file.getAPI(), url, "GET");
         BoxAPIResponse response = request.send();
-        return new Util.InputStreamForDownloading(response.getBody(listener), false) {
+        return new BufferedInputStream(new Util.InputStreamForDownloading(response.getBody(listener), false) {
             @Override
             protected void onClosed() throws IOException {
                 response.disconnect();
             }
-        };
+        }, Util.BUFFER_SIZE);
     }
 
     /**
@@ -74,7 +76,8 @@ public class BoxUtil {
      * @param consumer for cache, new file info will be given
      */
     public static OutputStream getOutputStreamForUpload(BoxFolder parent, String fileName, Consumer<BoxItem.Info> consumer) {
-        return new Util.OutputStreamForUploading(null, false) {
+        return new BufferedOutputStream(new Util.OutputStreamForUploading(null, false) {
+            // TODO pool
             ExecutorService executor = Executors.newSingleThreadExecutor();
             Future<BoxItem.Info> future;
             CountDownLatch latch1 = new CountDownLatch(1);
@@ -116,7 +119,7 @@ public class BoxUtil {
                     throw new IllegalStateException(e);
                 }
             }
-        };
+        }, Util.BUFFER_SIZE);
     }
 }
 
