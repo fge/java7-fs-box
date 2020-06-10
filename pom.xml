@@ -61,7 +61,7 @@
                 <TEST_CLIENT_ID>${test.client_id}</TEST_CLIENT_ID>
                 <TEST_CLIENT_SECRET>${test.client_secret}</TEST_CLIENT_SECRET>
                 <TEST_REDIRECT_URL>${test.redirect_url}</TEST_REDIRECT_URL>
-                <TEST_DEVELOPER_TOKEN>${test.developer_token}</TEST_DEVELOPER_TOKEN>
+                <BOX_DEVELOPER_TOKEN>${box.developer_token}</BOX_DEVELOPER_TOKEN>
               </environmentVariables>
               <argLine>
                 -Djava.util.logging.config.file=${project.build.testOutputDirectory}/logging.properties
@@ -141,7 +141,7 @@
     <dependency>
       <groupId>com.github.umjammer.vavi-net-auth</groupId>
       <artifactId>vavi-net-auth-box</artifactId>
-      <version>0.1.1</version>
+      <version>0.1.2</version>
     </dependency>
 
     <dependency>

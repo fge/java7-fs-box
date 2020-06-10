@@ -54,14 +54,14 @@ class Test1 {
     /**
      * environment variable
      * <ul>
-     * <li> TEST_DEVELOPER_TOKEN
+     * <li> BOX_DEVELOPER_TOKEN
      * </ul>
      * @see "https://app.box.com/developers/console/app/216798/configuration"
      */
     @Test
-    @EnabledIfEnvironmentVariable(named = "TEST_DEVELOPER_TOKEN", matches = ".+")
+    @EnabledIfEnvironmentVariable(named = "BOX_DEVELOPER_TOKEN", matches = ".+")
     void test02() throws Exception {
-        System.setProperty("vavi.nio.file.box.BoxFileSystemRepository.oauth2", "com.github.fge.filesystem.box.BoxDevOAuth2");
+        System.setProperty("vavi.nio.file.box.BoxFileSystemRepository.oauth2", "vavi.net.auth.oauth2.box.BoxDevOAuth2");
 
         Map<String, Object> env = new HashMap<>();
         env.put(BoxFileSystemProvider.ENV_APP_CREDENTIAL, new DummyAppCredential());
