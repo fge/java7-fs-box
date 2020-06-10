@@ -53,7 +53,7 @@ Then write your code! Here is a short example (imports omitted for brevity):
 ```java
 public class Main {
 
-    public static void main(final String[] args) throws IOException {
+    public static void main(String[] args) throws IOException {
         String email = "xxx@yyy.zzz";
 
         URI uri = URI.create("box:///?id=" + email);

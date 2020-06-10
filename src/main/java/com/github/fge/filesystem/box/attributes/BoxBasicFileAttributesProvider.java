@@ -37,7 +37,7 @@ public final class BoxBasicFileAttributesProvider
     @Override
     public FileTime creationTime()
     {
-        return entry.getCreatedAt() != null ? FileTime.fromMillis(entry.getCreatedAt().getTime()) : FileTime.fromMillis(0);
+        return entry.getCreatedAt() != null ? FileTime.fromMillis(entry.getCreatedAt().getTime()) : UNIX_EPOCH;
     }
 
     /**
