@@ -3,7 +3,6 @@ package com.github.fge.filesystem.box.driver;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
@@ -16,7 +15,6 @@ import java.nio.file.NotDirectoryException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
@@ -36,12 +34,11 @@ import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
 import com.github.fge.filesystem.box.exceptions.BoxIOException;
 import com.github.fge.filesystem.box.io.BoxUtil;
-import com.github.fge.filesystem.driver.UnixLikeFileSystemDriverBase;
+import com.github.fge.filesystem.driver.ExtendedFileSystemDriverBase;
 import com.github.fge.filesystem.exceptions.IsDirectoryException;
 import com.github.fge.filesystem.provider.FileSystemFactoryProvider;
 
 import vavi.nio.file.Cache;
-import vavi.nio.file.UploadMonitor;
 import vavi.nio.file.Util;
 import vavi.util.Debug;
 
@@ -53,7 +50,7 @@ import static vavi.nio.file.Util.toFilenameString;
  */
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemDriver
-    extends UnixLikeFileSystemDriverBase
+    extends ExtendedFileSystemDriverBase
 {
     private boolean ignoreAppleDouble = false;
     private final BoxFolder.Info rootInfo;
@@ -68,20 +65,6 @@ public final class BoxFileSystemDriver
         this.rootInfo = Objects.requireNonNull(rootInfo);
         ignoreAppleDouble = (Boolean) ((Map<String, Object>) env).getOrDefault("ignoreAppleDouble", Boolean.FALSE);
     }
-
-    /** */
-    private UploadMonitor uploadMonitor = new UploadMonitor();
-
-    /** entry for uploading (for attributes) */
-    private static final BoxItem.Info dummy = new BoxFile(null, "dummy") {
-        public BoxFile.Info getInfo() {
-            return new Info() {
-                public String getName() {
-                    return "vavi-nio-file-box.dummy";
-                }
-            };
-        }
-    }.getInfo();
 
     private static boolean isFolder(final BoxItem.Info entry)
     {
@@ -209,45 +192,6 @@ Debug.println("newOutputStream: " + e.getMessage());
     }
 
     @Override
-    public SeekableByteChannel newByteChannel(Path path,
-                                              Set<? extends OpenOption> options,
-                                              FileAttribute<?>... attrs) throws IOException {
-        if (options != null && Util.isWriting(options)) {
-            uploadMonitor.start(path);
-            return new Util.SeekableByteChannelForWriting(newOutputStream(path, options)) {
-                @Override
-                protected long getLeftOver() throws IOException {
-                    long leftover = 0;
-                    if (options.contains(StandardOpenOption.APPEND)) {
-                        BoxItem.Info entry = cache.getEntry(path);
-                        if (entry != null && entry.getSize() >= 0) {
-                            leftover = entry.getSize();
-                        }
-                    }
-                    return leftover;
-                }
-                @Override
-                public void close() throws IOException {
-System.out.println("SeekableByteChannelForWriting::close");
-                    uploadMonitor.finish(path);
-                    super.close();
-                }
-            };
-        } else {
-            BoxItem.Info entry = cache.getEntry(path);
-            if (isFolder(entry)) {
-                throw new NoSuchFileException(path.toString());
-            }
-            return new Util.SeekableByteChannelForReading(newInputStream(path, null)) {
-                @Override
-                protected long getSize() throws IOException {
-                    return entry.getSize();
-                }
-            };
-        }
-    }
-
-    @Override
     public void createDirectory(final Path dir, final FileAttribute<?>... attrs)
         throws IOException
     {
@@ -334,14 +278,9 @@ System.out.println("SeekableByteChannelForWriting::close");
     }
 
     @Override
-    public void checkAccess(final Path path, final AccessMode... modes)
+    protected void checkAccessImpl(final Path path, final AccessMode... modes)
         throws IOException
     {
-        if (uploadMonitor.isUploading(path)) {
-Debug.println("uploading... : " + path);
-            return;
-        }
-
         final BoxItem.Info entry = cache.getEntry(path);
 
         final Set<AccessMode> set = EnumSet.noneOf(AccessMode.class);
@@ -380,14 +319,9 @@ Debug.println("uploading... : " + path);
 
     @Nonnull
     @Override
-    public BoxItem.Info getPathMetadata(final Path path)
+    protected BoxItem.Info getPathMetadataImpl(final Path path)
         throws IOException
     {
-        if (uploadMonitor.isUploading(path)) {
-Debug.println("uploading... : " + path);
-            return dummy;
-        }
-
         // TODO: when symlinks are supported this may turn out to be wrong
         return cache.getEntry(path);
     }
