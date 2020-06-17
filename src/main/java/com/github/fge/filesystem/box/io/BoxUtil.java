@@ -78,7 +78,7 @@ public class BoxUtil {
      * @param consumer for cache, new file info will be given
      */
     public static OutputStream getOutputStreamForUpload(BoxFolder parent, String fileName, Consumer<BoxItem.Info> consumer) {
-        return new BufferedOutputStream(new Util.OutputStreamForUploading(null, false) {
+        return new BufferedOutputStream(new Util.OutputStreamForUploading(null, false) { // internal out will be created
             // TODO pool
             ExecutorService executor = Executors.newSingleThreadExecutor();
             Future<BoxItem.Info> future;
