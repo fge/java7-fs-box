@@ -5,7 +5,7 @@
 
   <groupId>com.github.fge</groupId>
   <artifactId>java7-fs-box</artifactId>
-  <version>0.1.10v</version>
+  <version>0.1.11v</version>
 
   <name>java7-fs-box</name>
   <scm>
@@ -15,7 +15,7 @@
 
   <properties>
     <vavi-nio-file.groupId>com.github.umjammer</vavi-nio-file.groupId>
-    <vavi-nio-file.version>0.0.10</vavi-nio-file.version>
+    <vavi-nio-file.version>0.0.11</vavi-nio-file.version>
   </properties>
 
   <profiles>
@@ -129,7 +129,7 @@
     <dependency>
       <groupId>com.github.umjammer</groupId>
       <artifactId>java7-fs-base</artifactId>
-      <version>0.0.8v</version>
+      <version>0.0.9v</version>
     </dependency>
 
     <dependency>
