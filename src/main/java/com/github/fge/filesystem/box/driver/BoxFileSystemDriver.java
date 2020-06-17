@@ -174,7 +174,7 @@ Debug.println("newOutputStream: " + e.getMessage());
 
         BoxItem.Info parentEntry = cache.getEntry(path.getParent());
         return BoxUtil.getOutputStreamForUpload(asFolder(parentEntry).getResource(), toFilenameString(path), newEntry -> {
-                cache.addEntry(path, newEntry);
+            cache.addEntry(path, newEntry);
         });
     }
 
@@ -411,8 +411,9 @@ System.out.println("getDirectoryEntries: " + dir);
                 cache.addEntry(target, patchedEntry);
             }
         } else if (isFolder(sourceEntry)) {
-            // TODO java spec. allows empty folder
-            throw new IsDirectoryException("source can not be a folder: " + source);
+            BoxItem.Info parentEntry = cache.getEntry(target.getParent());
+            BoxItem.Info patchedEntry = asFolder(sourceEntry).getResource().move(asFolder(parentEntry).getResource(), toFilenameString(target));
+            cache.moveEntry(source, target, patchedEntry);
         }
     }
 
