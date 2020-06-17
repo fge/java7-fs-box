@@ -174,11 +174,7 @@ Debug.println("newOutputStream: " + e.getMessage());
 
         BoxItem.Info parentEntry = cache.getEntry(path.getParent());
         return BoxUtil.getOutputStreamForUpload(asFolder(parentEntry).getResource(), toFilenameString(path), newEntry -> {
-            try {
                 cache.addEntry(path, newEntry);
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
         });
     }
 
