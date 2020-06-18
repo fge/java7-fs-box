@@ -367,7 +367,7 @@ System.out.println("getDirectoryEntries: " + dir);
     private void removeEntry(Path path) throws IOException {
         BoxItem.Info entry = cache.getEntry(path);
         if (isFolder(entry)) {
-            if (cache.getChildCount(path) > 0) { // TODO check real instead of cache
+            if (getDirectoryEntries(path).size() > 0) {
                 throw new DirectoryNotEmptyException(path.toString());
             }
             asFolder(entry).getResource().delete(false);
