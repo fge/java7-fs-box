@@ -4,7 +4,7 @@
  * Programmed by Naohide Sano
  */
 
-package com.github.fge.filesystem.box.opts;
+package com.github.fge.filesystem.box;
 
 import java.nio.file.LinkOption;
 

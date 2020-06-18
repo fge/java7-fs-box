@@ -1,4 +1,4 @@
-package com.github.fge.filesystem.box.provider;
+package com.github.fge.filesystem.box;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -12,8 +12,6 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.box.sdk.BoxAPIConnection;
 import com.box.sdk.BoxFolder;
-import com.github.fge.filesystem.box.driver.BoxFileSystemDriver;
-import com.github.fge.filesystem.box.filestore.BoxFileStore;
 import com.github.fge.filesystem.driver.FileSystemDriver;
 import com.github.fge.filesystem.provider.FileSystemRepositoryBase;
 

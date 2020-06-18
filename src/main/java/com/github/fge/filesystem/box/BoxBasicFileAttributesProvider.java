@@ -1,4 +1,4 @@
-package com.github.fge.filesystem.box.attributes;
+package com.github.fge.filesystem.box;
 
 import java.io.IOException;
 import java.nio.file.attribute.FileTime;

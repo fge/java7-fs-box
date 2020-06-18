@@ -14,8 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import com.github.fge.filesystem.box.provider.BoxFileSystemProvider;
-
 import static vavi.nio.file.Base.testAll;
 
 

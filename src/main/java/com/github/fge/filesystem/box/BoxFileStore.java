@@ -1,4 +1,4 @@
-package com.github.fge.filesystem.box.filestore;
+package com.github.fge.filesystem.box;
 
 import com.box.sdk.BoxFolder;
 import com.github.fge.filesystem.attributes.FileAttributesFactory;

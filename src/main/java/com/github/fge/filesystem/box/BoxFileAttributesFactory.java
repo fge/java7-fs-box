@@ -1,4 +1,4 @@
-package com.github.fge.filesystem.box.attributes;
+package com.github.fge.filesystem.box;
 
 import com.box.sdk.BoxItem;
 import com.github.fge.filesystem.attributes.FileAttributesFactory;

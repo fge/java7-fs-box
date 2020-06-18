@@ -1,4 +1,4 @@
-package com.github.fge.filesystem.box.provider;
+package com.github.fge.filesystem.box;
 
 import com.github.fge.filesystem.provider.FileSystemProviderBase;
 

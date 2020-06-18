@@ -1,4 +1,4 @@
-package com.github.fge.filesystem.box.driver;
+package com.github.fge.filesystem.box;
 
 import java.io.IOException;
 import java.io.InputStream;
