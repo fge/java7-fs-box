@@ -1,8 +1,11 @@
 package com.github.fge.filesystem.box;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URL;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
@@ -24,16 +27,22 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.box.sdk.BoxAPIException;
+import com.box.sdk.BoxAPIRequest;
+import com.box.sdk.BoxAPIResponse;
 import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
-import com.github.fge.filesystem.box.exceptions.BoxIOException;
-import com.github.fge.filesystem.box.io.BoxUtil;
+import com.box.sdk.UploadFileCallback;
 import com.github.fge.filesystem.driver.ExtendedFileSystemDriverBase;
 import com.github.fge.filesystem.exceptions.IsDirectoryException;
 import com.github.fge.filesystem.provider.FileSystemFactoryProvider;
@@ -150,7 +159,16 @@ public final class BoxFileSystemDriver
             throw new IsDirectoryException(path.toString());
         }
 
-        return BoxUtil.getInputStreamForDownload(asFile(entry).getResource());
+        BoxFile file = asFile(entry).getResource();
+        URL url = BoxFile.CONTENT_URL_TEMPLATE.build(file.getAPI().getBaseURL(), file.getID());
+        BoxAPIRequest request = new BoxAPIRequest(file.getAPI(), url, "GET");
+        BoxAPIResponse response = request.send();
+        return new BufferedInputStream(new Util.InputStreamForDownloading(response.getBody(null), false) {
+            @Override
+            protected void onClosed() throws IOException {
+                response.disconnect();
+            }
+        }, Util.BUFFER_SIZE);
     }
 
     @Nonnull
@@ -172,10 +190,58 @@ public final class BoxFileSystemDriver
 Debug.println("newOutputStream: " + e.getMessage());
         }
 
-        BoxItem.Info parentEntry = cache.getEntry(path.getParent());
-        return BoxUtil.getOutputStreamForUpload(asFolder(parentEntry).getResource(), toFilenameString(path), newEntry -> {
-            cache.addEntry(path, newEntry);
-        });
+        return uploadEntry(path);
+    }
+
+    /** */
+    private OutputStream uploadEntry(Path path) throws IOException {
+        return new BufferedOutputStream(new Util.OutputStreamForUploading(null, false) { // internal out will be created
+            // TODO pool
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            Future<BoxItem.Info> future;
+            CountDownLatch latch1 = new CountDownLatch(1);
+            CountDownLatch latch2 = new CountDownLatch(1);
+            CountDownLatch latch3 = new CountDownLatch(1);
+            void init() {
+                UploadFileCallback callback = new UploadFileCallback() {
+                    @Override
+                    public void writeToStream(OutputStream os) throws IOException {
+                        out = os;
+                        latch1.countDown();
+                        try { latch2.await(); } catch (InterruptedException e) { throw new IllegalStateException(e); }
+                    }
+                };
+                future = executor.submit(() -> {
+                    BoxItem.Info parentEntry = cache.getEntry(path.getParent());
+                    BoxFolder parent = asFolder(parentEntry).getResource();
+                    BoxItem.Info info = parent.uploadFile(callback, toFilenameString(path));
+                    latch3.countDown();
+                    return info;
+                });
+                try { latch1.await(); } catch (InterruptedException e) { throw new IllegalStateException(e); }
+            }
+
+            @Override
+            public void write(int b) throws IOException {
+                if (out == null) {
+                    init();
+                }
+                super.write(b);
+            }
+
+            @Override
+            protected void onClosed() throws IOException {
+                try {
+                    latch2.countDown();
+                    latch3.await();
+                    out.close();
+
+                    cache.addEntry(path, future.get());
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }, Util.BUFFER_SIZE);
     }
 
     @Nonnull
