@@ -196,7 +196,7 @@ Debug.println("newOutputStream: " + e.getMessage());
             BoxItem.Info newEntry = asFolder(parentEntry).getResource().createFolder(toFilenameString(dir));
             cache.addEntry(dir, newEntry);
         } catch (BoxAPIException e) {
-            throw BoxIOException.wrap(e);
+            throw new IOException(e);
         }
     }
 
