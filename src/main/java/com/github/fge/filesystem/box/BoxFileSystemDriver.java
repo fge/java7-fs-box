@@ -124,12 +124,7 @@ public final class BoxFileSystemDriver
                 Path name = path.getName(i);
                 Path sub = path.subpath(0, i + 1);
                 Path parent = sub.getParent() != null ? sub.getParent() : path.getFileSystem().getPath("/");
-                List<Path> bros;
-                if (!containsFile(parent) || !containsFolder(parent)) {
-                    bros = getDirectoryEntries(parent);
-                } else {
-                    bros = getFolder(parent);
-                }
+                List<Path> bros = getDirectoryEntries(parent, false);
                 Optional<Path> found = bros.stream().filter(p -> p.getFileName().equals(name)).findFirst();
                 if (!found.isPresent()) {
                     return null;
@@ -216,7 +211,7 @@ Debug.println("newOutputStream: " + e.getMessage());
         final DirectoryStream.Filter<? super Path> filter)
         throws IOException
     {
-        return Util.newDirectoryStream(getDirectoryEntries(dir), filter);
+        return Util.newDirectoryStream(getDirectoryEntries(dir, true), filter);
     }
 
     @Override
@@ -369,7 +364,7 @@ Debug.println("newOutputStream: " + e.getMessage());
     }
 
     /** */
-    private List<Path> getDirectoryEntries(Path dir) throws IOException {
+    private List<Path> getDirectoryEntries(Path dir, boolean useCache) throws IOException {
         final BoxItem.Info entry = cache.getEntry(dir);
 
         if (!isFolder(entry)) {
@@ -377,7 +372,7 @@ Debug.println("newOutputStream: " + e.getMessage());
         }
 
         List<Path> list = null;
-        if (cache.containsFolder(dir)) {
+        if (useCache && cache.containsFolder(dir)) {
             list = cache.getFolder(dir);
         } else {
             list = new ArrayList<>();
@@ -397,7 +392,7 @@ Debug.println("newOutputStream: " + e.getMessage());
     private void removeEntry(Path path) throws IOException {
         BoxItem.Info entry = cache.getEntry(path);
         if (isFolder(entry)) {
-            if (getDirectoryEntries(path).size() > 0) {
+            if (getDirectoryEntries(path, false).size() > 0) {
                 throw new DirectoryNotEmptyException(path.toString());
             }
             asFolder(entry).getResource().delete(false);
@@ -443,6 +438,7 @@ Debug.println("newOutputStream: " + e.getMessage());
         } else if (isFolder(sourceEntry)) {
             BoxItem.Info parentEntry = cache.getEntry(target.getParent());
             BoxItem.Info patchedEntry = asFolder(sourceEntry).getResource().move(asFolder(parentEntry).getResource(), toFilenameString(target));
+Debug.println(patchedEntry.getID() + ", " + patchedEntry.getParent().getName() + "/" + patchedEntry.getName());
             cache.moveEntry(source, target, patchedEntry);
         }
     }
@@ -450,7 +446,6 @@ Debug.println("newOutputStream: " + e.getMessage());
     /** */
     private void renameEntry(final Path source, final Path target) throws IOException {
         BoxItem.Info sourceEntry = cache.getEntry(source);
-//Debug.println(sourceEntry.id + ", " + sourceEntry.name);
 
         BoxItem.Info parentEntry = cache.getEntry(target.getParent());
         BoxItem.Info patchedEntry = asFile(sourceEntry).getResource().move(asFolder(parentEntry).getResource(), toFilenameString(target));
