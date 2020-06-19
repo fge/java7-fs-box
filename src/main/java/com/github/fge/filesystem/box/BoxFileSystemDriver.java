@@ -27,11 +27,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -98,7 +93,6 @@ public final class BoxFileSystemDriver
     /** */
     private Cache<BoxItem.Info> cache = new Cache<BoxItem.Info>() {
         /**
-         * TODO when the parent is not cached
          * @see #ignoreAppleDouble
          * @throws NoSuchFileException must be thrown when the path is not found in this cache
          */
@@ -195,51 +189,23 @@ Debug.println("newOutputStream: " + e.getMessage());
 
     /** */
     private OutputStream uploadEntry(Path path) throws IOException {
-        return new BufferedOutputStream(new Util.OutputStreamForUploading(null, false) { // internal out will be created
-            // TODO pool
-            ExecutorService executor = Executors.newSingleThreadExecutor();
-            Future<BoxItem.Info> future;
-            CountDownLatch latch1 = new CountDownLatch(1);
-            CountDownLatch latch2 = new CountDownLatch(1);
-            CountDownLatch latch3 = new CountDownLatch(1);
-            void init() {
+        return new BufferedOutputStream(new Util.StrealingOutputStreamForUploading<BoxItem.Info>() {
+            @Override
+            protected BoxItem.Info upload() throws IOException {
                 UploadFileCallback callback = new UploadFileCallback() {
                     @Override
                     public void writeToStream(OutputStream os) throws IOException {
-                        out = os;
-                        latch1.countDown();
-                        try { latch2.await(); } catch (InterruptedException e) { throw new IllegalStateException(e); }
+                        setOutputStream(os);
                     }
                 };
-                future = executor.submit(() -> {
-                    BoxItem.Info parentEntry = cache.getEntry(path.getParent());
-                    BoxFolder parent = asFolder(parentEntry).getResource();
-                    BoxItem.Info info = parent.uploadFile(callback, toFilenameString(path));
-                    latch3.countDown();
-                    return info;
-                });
-                try { latch1.await(); } catch (InterruptedException e) { throw new IllegalStateException(e); }
+                BoxItem.Info parentEntry = cache.getEntry(path.getParent());
+                BoxFolder parent = asFolder(parentEntry).getResource();
+                return parent.uploadFile(callback, toFilenameString(path));
             }
 
             @Override
-            public void write(int b) throws IOException {
-                if (out == null) {
-                    init();
-                }
-                super.write(b);
-            }
-
-            @Override
-            protected void onClosed() throws IOException {
-                try {
-                    latch2.countDown();
-                    latch3.await();
-                    out.close();
-
-                    cache.addEntry(path, future.get());
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new IllegalStateException(e);
-                }
+            protected void onClosed(BoxItem.Info newEntry) {
+                cache.addEntry(path, newEntry);
             }
         }, Util.BUFFER_SIZE);
     }
@@ -375,7 +341,7 @@ Debug.println("newOutputStream: " + e.getMessage());
         }
 
         if (set.size() > 0) {
-            throw new AccessDeniedException(path.toString() + ": " + set);
+            throw new AccessDeniedException(path + ": " + set);
         }
     }
 
@@ -404,11 +370,9 @@ Debug.println("newOutputStream: " + e.getMessage());
 
     /** */
     private List<Path> getDirectoryEntries(Path dir) throws IOException {
-System.out.println("getDirectoryEntries: " + dir);
         final BoxItem.Info entry = cache.getEntry(dir);
 
         if (!isFolder(entry)) {
-//System.err.println(entry.name + ", " + entry.id + ", " + entry.hashCode());
             throw new NotDirectoryException(dir.toString());
         }
 
