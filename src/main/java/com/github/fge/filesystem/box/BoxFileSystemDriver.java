@@ -123,7 +123,7 @@ public final class BoxFileSystemDriver
             for (int i = 0; i < path.getNameCount(); i++) {
                 Path name = path.getName(i);
                 Path sub = path.subpath(0, i + 1);
-                Path parent = sub.getParent() != null ? sub.getParent() : path.getFileSystem().getPath("/");
+                Path parent = sub.toAbsolutePath().getParent();
                 List<Path> bros = getDirectoryEntries(parent, false);
                 Optional<Path> found = bros.stream().filter(p -> p.getFileName().equals(name)).findFirst();
                 if (!found.isPresent()) {
@@ -193,7 +193,7 @@ Debug.println("newOutputStream: " + e.getMessage());
                         setOutputStream(os);
                     }
                 };
-                BoxItem.Info parentEntry = cache.getEntry(path.getParent());
+                BoxItem.Info parentEntry = cache.getEntry(path.toAbsolutePath().getParent());
                 BoxFolder parent = asFolder(parentEntry).getResource();
                 return parent.uploadFile(callback, toFilenameString(path));
             }
@@ -219,7 +219,7 @@ Debug.println("newOutputStream: " + e.getMessage());
         throws IOException
     {
         try {
-            final BoxItem.Info parentEntry = cache.getEntry(dir.getParent());
+            final BoxItem.Info parentEntry = cache.getEntry(dir.toAbsolutePath().getParent());
             BoxItem.Info newEntry = asFolder(parentEntry).getResource().createFolder(toFilenameString(dir));
             cache.addEntry(dir, newEntry);
         } catch (BoxAPIException e) {
@@ -291,7 +291,7 @@ Debug.println("newOutputStream: " + e.getMessage());
                 }
             }
         } else {
-            if (source.getParent().equals(target.getParent())) {
+            if (source.toAbsolutePath().getParent().equals(target.toAbsolutePath().getParent())) {
                 // rename
                 renameEntry(source, target);
             } else {
@@ -407,7 +407,7 @@ Debug.println("newOutputStream: " + e.getMessage());
     private void copyEntry(final Path source, final Path target) throws IOException {
         BoxItem.Info sourceEntry = cache.getEntry(source);
         if (isFile(sourceEntry)) {
-            BoxItem.Info parentEntry = cache.getEntry(source.getParent());
+            BoxItem.Info parentEntry = cache.getEntry(source.toAbsolutePath().getParent());
             BoxItem.Info newEntry = asFile(sourceEntry).getResource().copy(asFolder(parentEntry).getResource(), toFilenameString(target));
             cache.addEntry(target, newEntry);
         } else if (isFolder(sourceEntry)) {
@@ -422,7 +422,7 @@ Debug.println("newOutputStream: " + e.getMessage());
     private void moveEntry(final Path source, final Path target, boolean targetIsParent) throws IOException {
         BoxItem.Info sourceEntry = cache.getEntry(source);
         if (isFile(sourceEntry)) {
-            BoxItem.Info parentEntry = cache.getEntry(targetIsParent ? target : target.getParent());
+            BoxItem.Info parentEntry = cache.getEntry(targetIsParent ? target : target.toAbsolutePath().getParent());
             BoxItem.Info patchedEntry;
             if (targetIsParent) {
                 patchedEntry = asFile(sourceEntry).getResource().move(asFolder(parentEntry).getResource());
@@ -436,7 +436,7 @@ Debug.println("newOutputStream: " + e.getMessage());
                 cache.addEntry(target, patchedEntry);
             }
         } else if (isFolder(sourceEntry)) {
-            BoxItem.Info parentEntry = cache.getEntry(target.getParent());
+            BoxItem.Info parentEntry = cache.getEntry(target.toAbsolutePath().getParent());
             BoxItem.Info patchedEntry = asFolder(sourceEntry).getResource().move(asFolder(parentEntry).getResource(), toFilenameString(target));
 Debug.println(patchedEntry.getID() + ", " + patchedEntry.getParent().getName() + "/" + patchedEntry.getName());
             cache.moveEntry(source, target, patchedEntry);
@@ -447,7 +447,7 @@ Debug.println(patchedEntry.getID() + ", " + patchedEntry.getParent().getName() +
     private void renameEntry(final Path source, final Path target) throws IOException {
         BoxItem.Info sourceEntry = cache.getEntry(source);
 
-        BoxItem.Info parentEntry = cache.getEntry(target.getParent());
+        BoxItem.Info parentEntry = cache.getEntry(target.toAbsolutePath().getParent());
         BoxItem.Info patchedEntry = asFile(sourceEntry).getResource().move(asFolder(parentEntry).getResource(), toFilenameString(target));
         cache.removeEntry(source);
         cache.addEntry(target, patchedEntry);
