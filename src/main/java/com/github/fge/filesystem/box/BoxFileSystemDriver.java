@@ -185,7 +185,7 @@ Debug.println("newOutputStream: " + e.getMessage());
 
     /** */
     private OutputStream uploadEntry(Path path) throws IOException {
-        return new BufferedOutputStream(new Util.StrealingOutputStreamForUploading<BoxItem.Info>() {
+        return new BufferedOutputStream(new Util.StealingOutputStreamForUploading<BoxItem.Info>() {
             @Override
             protected BoxItem.Info upload() throws IOException {
                 UploadFileCallback callback = new UploadFileCallback() {
