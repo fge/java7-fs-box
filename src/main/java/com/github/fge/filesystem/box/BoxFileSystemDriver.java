@@ -47,6 +47,7 @@ import vavi.nio.file.Util;
 import vavi.util.Debug;
 
 import static vavi.nio.file.Util.toFilenameString;
+import static com.github.fge.filesystem.box.BoxFileSystemProvider.ENV_IGNORE_APPLE_DOUBLE;
 
 /**
  * Box filesystem driver
@@ -67,7 +68,7 @@ public final class BoxFileSystemDriver
     {
         super(fileStore, factoryProvider);
         this.rootInfo = Objects.requireNonNull(rootInfo);
-        ignoreAppleDouble = (Boolean) ((Map<String, Object>) env).getOrDefault("ignoreAppleDouble", Boolean.FALSE);
+        ignoreAppleDouble = (Boolean) ((Map<String, Object>) env).getOrDefault(ENV_IGNORE_APPLE_DOUBLE, false);
     }
 
     private static boolean isFolder(final BoxItem.Info entry)
