@@ -71,6 +71,9 @@ public final class BoxFileSystemDriver
         ignoreAppleDouble = (Boolean) ((Map<String, Object>) env).getOrDefault(ENV_IGNORE_APPLE_DOUBLE, false);
     }
 
+    /** */
+    private static final String[] ENTRY_FIELDS = { "name", "size", "created_at", "modified_at", "permissions" };
+
     private static boolean isFolder(final BoxItem.Info entry)
     {
         return BoxFolder.Info.class.isInstance(entry);
@@ -119,6 +122,7 @@ public final class BoxFileSystemDriver
                 return entry;
             }
         }
+        /** @return null when not found */ // TODO performance tuning
         BoxItem.Info getItem(final Path path) throws IOException {
             BoxItem.Info entry = null;
             for (int i = 0; i < path.getNameCount(); i++) {
@@ -378,7 +382,7 @@ Debug.println("newOutputStream: " + e.getMessage());
         } else {
             list = new ArrayList<>();
 
-            for (final BoxItem.Info childEntry : asFolder(entry).getResource().getChildren("name", "size", "created_at", "modified_at", "permissions")) {
+            for (final BoxItem.Info childEntry : asFolder(entry).getResource().getChildren(ENTRY_FIELDS)) {
                 Path childPath = dir.resolve(childEntry.getName());
                 list.add(childPath);
                 cache.putFile(childPath, childEntry);
