@@ -18,12 +18,15 @@ import java.nio.file.NotDirectoryException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchService;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -46,8 +49,11 @@ import vavi.nio.file.Cache;
 import vavi.nio.file.Util;
 import vavi.util.Debug;
 
-import static vavi.nio.file.Util.toFilenameString;
 import static com.github.fge.filesystem.box.BoxFileSystemProvider.ENV_IGNORE_APPLE_DOUBLE;
+import static com.github.fge.filesystem.box.BoxFileSystemProvider.ENV_USE_SYSTEM_WATCHER;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
+import static vavi.nio.file.Util.toFilenameString;;
+
 
 /**
  * Box filesystem driver
@@ -60,15 +66,53 @@ public final class BoxFileSystemDriver
     private boolean ignoreAppleDouble = false;
     private final BoxFolder.Info rootInfo;
 
+    private BoxWatchService systemWatcher;
+
     @SuppressWarnings("unchecked")
     public BoxFileSystemDriver(final FileStore fileStore,
-        final FileSystemFactoryProvider factoryProvider,
-        final BoxFolder.Info rootInfo,
-        final Map<String, ?> env)
-    {
+            final FileSystemFactoryProvider factoryProvider,
+            final BoxFolder.Info rootInfo,
+            final Map<String, ?> env) throws IOException {
         super(fileStore, factoryProvider);
         this.rootInfo = Objects.requireNonNull(rootInfo);
         ignoreAppleDouble = (Boolean) ((Map<String, Object>) env).getOrDefault(ENV_IGNORE_APPLE_DOUBLE, false);
+        boolean useSystemWatcher = (Boolean) ((Map<String, Object>) env).getOrDefault(ENV_USE_SYSTEM_WATCHER, false);
+
+        if (useSystemWatcher) {
+            systemWatcher = new BoxWatchService(rootInfo);
+            systemWatcher.setNotificationListener(this::processNotification);
+        }
+    }
+
+    /** for system watcher */
+    private void processNotification(String id, Kind<?> kind) {
+        if (ENTRY_DELETE == kind) {
+            try {
+                Path path = cache.getEntry(e -> id.equals(e.getID()));
+                cache.removeEntry(path);
+            } catch (NoSuchElementException e) {
+Debug.println("NOTIFICATION: already deleted: " + id);
+            }
+        } else {
+            try {
+                try {
+                    Path path = cache.getEntry(e -> id.equals(e.getID()));
+Debug.println("NOTIFICATION: maybe updated: " + path);
+                    cache.removeEntry(path);
+                    cache.getEntry(path);
+                } catch (NoSuchElementException e) {
+// TODO impl
+//                    BoxItem.Info entry = BoxFile.client.files().getMetadata(pathString);
+//                    Path path = parent.resolve(pathString);
+//Debug.println("NOTIFICATION: maybe created: " + path);
+//                    cache.addEntry(path, entry);
+                }
+            } catch (NoSuchElementException e) {
+Debug.println("NOTIFICATION: parent not found: " + e);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     /** */
@@ -366,6 +410,16 @@ Debug.println("newOutputStream: " + e.getMessage());
         throws IOException
     {
         // TODO! Is there anything to be done here?
+    }
+
+    @Nonnull
+    @Override
+    public WatchService newWatchService() {
+        try {
+            return new BoxWatchService(rootInfo);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** */
