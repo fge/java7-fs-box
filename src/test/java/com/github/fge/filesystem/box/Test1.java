@@ -33,6 +33,7 @@ class Test1 {
      * <li> TEST_CLIENT_ID
      * <li> TEST_CLIENT_SECRET
      * <li> TEST_REDIRECT_URL
+     * <li> TEST_SCOPES
      * </ul>
      */
     @Test

@@ -36,9 +36,11 @@ Next, prepare 2 property files.
 
 ```shell
 $ cat ${HOME}/.vavifuse/box.properties
+box.applicationName=your_application_name
 box.clientId=your_client_id
 box.clientSecret=your_client_secret
 box.redirectUrl=http://localhost:30001
+box.scopes=root_readwrite
 ```
 
  * user credential

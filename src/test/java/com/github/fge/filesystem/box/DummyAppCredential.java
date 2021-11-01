@@ -12,11 +12,13 @@ import vavi.net.auth.oauth2.OAuth2AppCredential;
 /**
  * DummyAppCredential.
  *
+ * uses BOX_DEVELOPER_TOKEN, all fields are ignored.
+ *
  * @author <a href="mailto:umjammer@gmail.com">Naohide Sano</a> (umjammer)
  * @version 0.00 2020/05/01 umjammer initial version <br>
  * @see "https://app.box.com/developers/console"
  */
-public class DummyAppCredential implements OAuth2AppCredential {
+public final class DummyAppCredential implements OAuth2AppCredential {
 
     @Override
     public String getApplicationName() {

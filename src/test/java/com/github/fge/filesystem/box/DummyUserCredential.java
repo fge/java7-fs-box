@@ -12,10 +12,12 @@ import vavi.net.auth.UserCredential;
 /**
  * DummyUserCredential.
  *
+ * uses BOX_DEVELOPER_TOKEN, all fields are ignored.
+ *
  * @author <a href="mailto:umjammer@gmail.com">Naohide Sano</a> (umjammer)
  * @version 0.00 2020/05/02 umjammer initial version <br>
  */
-public class DummyUserCredential implements UserCredential {
+public final class DummyUserCredential implements UserCredential {
 
     @Override
     public String getId() {

@@ -15,11 +15,12 @@ import vavi.util.properties.annotation.PropsEntity;
 /**
  * BoxTestAppCredential.
  * <p>
- * environment variables
+ * uses environment variables instead of "~/vavifuse/box.properties"
  * <ul>
  * <li> TEST_CLIENT_ID
  * <li> TEST_CLIENT_SECRET
  * <li> TEST_REDIRECT_URL
+ * <li> TEST_SCOPES
  * </ul>
  *
  * @author <a href="mailto:umjammer@gmail.com">Naohide Sano</a> (umjammer)
@@ -27,7 +28,10 @@ import vavi.util.properties.annotation.PropsEntity;
  * @see "https://app.box.com/developers/console"
  */
 @PropsEntity
-public class BoxTestAppCredential extends BaseLocalAppCredential implements OAuth2AppCredential {
+public final class BoxTestAppCredential extends BaseLocalAppCredential implements OAuth2AppCredential {
+
+    @Env(name = "TEST_APPLICATION_NAME")
+    private String applicationName;
 
     @Env(name = "TEST_CLIENT_ID")
     private transient String clientId;
@@ -38,9 +42,12 @@ public class BoxTestAppCredential extends BaseLocalAppCredential implements OAut
     @Env(name = "TEST_REDIRECT_URL")
     private String redirectUrl;
 
+    @Env(name = "TEST_SCOPES")
+    private String scope;
+
     @Override
     public String getApplicationName() {
-        return "vavi-apps-fuse";
+        return applicationName;
     }
 
     @Override
@@ -75,7 +82,7 @@ public class BoxTestAppCredential extends BaseLocalAppCredential implements OAut
 
     @Override
     public String getScope() {
-        return null;
+        return scope;
     }
 }
 
