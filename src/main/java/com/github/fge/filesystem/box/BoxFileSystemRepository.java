@@ -80,6 +80,7 @@ public final class BoxFileSystemRepository
     }
 
     /** */
+    @SuppressWarnings("unchecked")
     private OAuth2<UserCredential, BoxAPIConnection> getOAuth2(OAuth2AppCredential appCredential) {
         try {
             return OAuth2.class.cast(Class.forName(oAuth2ClassName)

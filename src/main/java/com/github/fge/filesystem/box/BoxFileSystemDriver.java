@@ -16,7 +16,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -30,13 +29,14 @@ import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
 import com.box.sdk.UploadFileCallback;
-import com.github.fge.filesystem.driver.CachedFileSystemDriverBase;
+import com.github.fge.filesystem.driver.CachedFileSystemDriver;
 import com.github.fge.filesystem.provider.FileSystemFactoryProvider;
 
 import vavi.nio.file.Util;
 import vavi.util.Debug;
 
 import static vavi.nio.file.Util.toFilenameString;
+
 
 /**
  * Box filesystem driver
@@ -45,32 +45,22 @@ import static vavi.nio.file.Util.toFilenameString;
  */
 @ParametersAreNonnullByDefault
 public final class BoxFileSystemDriver
-    extends CachedFileSystemDriverBase<BoxItem.Info> {
+    extends CachedFileSystemDriver<BoxItem.Info> {
 
-    private final BoxFolder.Info rootInfo;
+    private BoxFolder.Info rootInfo;
 
-    @SuppressWarnings("unchecked")
     public BoxFileSystemDriver(final FileStore fileStore,
-        final FileSystemFactoryProvider factoryProvider,
-        final BoxFolder.Info rootInfo,
-        final Map<String, ?> env) {
+        FileSystemFactoryProvider factoryProvider,
+        BoxFolder.Info rootInfo,
+        Map<String, ?> env) {
 
-    	super(fileStore, factoryProvider);
+        super(fileStore, factoryProvider);
         this.rootInfo = Objects.requireNonNull(rootInfo);
-        ignoreAppleDouble = (Boolean) ((Map<String, Object>) env).getOrDefault("ignoreAppleDouble", Boolean.FALSE);
-    }
-
-    @Override
-    protected boolean isFolder(BoxItem.Info entry) {
-        return BoxFolder.Info.class.isInstance(entry);
+        setEnv(env);
     }
 
     private static BoxFolder.Info asFolder(BoxItem.Info entry) {
         return BoxFolder.Info.class.cast(entry);
-    }
-
-    private static boolean isFile(BoxItem.Info entry) {
-        return BoxFile.Info.class.isInstance(entry);
     }
 
     private static BoxFile.Info asFile(BoxItem.Info entry) {
@@ -78,32 +68,18 @@ public final class BoxFileSystemDriver
     }
 
     @Override
-    protected String getFilenameString(BoxItem.Info entry) throws IOException {
-    	return entry.getName();
+    protected String getFilenameString(BoxItem.Info entry) {
+        return entry.getName();
     }
 
     @Override
-    protected BoxItem.Info getRootEntry() throws IOException {
-    	return rootInfo;
+    protected boolean isFolder(BoxItem.Info entry) {
+        return BoxFolder.Info.class.isInstance(entry);
     }
 
     @Override
-    protected BoxItem.Info getEntry(BoxItem.Info dirEntry, Path path)throws IOException {
-Debug.println(Level.FINE, dirEntry.getName() + ", " + path);
-    	BoxItem.Info entry = null;
-        for (int i = 0; i < path.getNameCount(); i++) {
-            Path name = path.getName(i);
-            Path sub = path.subpath(0, i + 1);
-            Path parent = sub.getParent() != null ? sub.getParent() : path.getFileSystem().getPath("/");
-            List<Path> bros = getDirectoryEntries(parent, false);
-            Optional<Path> found = bros.stream().filter(p -> p.getFileName().equals(name)).findFirst();
-            if (!found.isPresent()) {
-                return null;
-            } else {
-                entry = cache.getFile(found.get()); // TODO not hidden...
-            }
-        }
-        return entry;
+    protected BoxItem.Info getRootEntry(Path root) throws IOException {
+        return rootInfo;
     }
 
     @Override
@@ -137,68 +113,26 @@ Debug.println(Level.FINE, dirEntry.getName() + ", " + path);
 
             @Override
             protected void onClosed(BoxItem.Info newEntry) {
-                cache.addEntry(path, newEntry);
+                updateEntry(path, newEntry);
             }
         }, Util.BUFFER_SIZE);
     }
 
     @Override
-    protected BoxItem.Info createDirectoryEntry(Path dir) throws IOException {
-        BoxItem.Info parentEntry = cache.getEntry(dir.getParent());
-        return asFolder(parentEntry).getResource().createFolder(toFilenameString(dir));
-    }
-
-    // TODO separate sub method or not?
-    @Override
-    protected void checkAccessImpl(final Path path, final AccessMode... modes)
-        throws IOException
-    {
-        final BoxItem.Info entry = cache.getEntry(path);
-
-        final Set<AccessMode> set = EnumSet.noneOf(AccessMode.class);
-
-        if (!isFile(entry)) {
-            return;
-        } else {
-            EnumSet<BoxFile.Permission> permissions = asFile(entry).getPermissions();
-            if (permissions != null) {
-                for (AccessMode mode : modes) {
-                    switch (mode) {
-                    case READ:
-                        if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
-                            set.add(AccessMode.READ);
-                        }
-                        break;
-                    case WRITE:
-                        if (!permissions.contains(BoxFile.Permission.CAN_UPLOAD)) {
-                            set.add(AccessMode.WRITE);
-                        }
-                        break;
-                    case EXECUTE:
-                        if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
-                            set.add(AccessMode.EXECUTE);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (set.size() > 0) {
-            throw new AccessDeniedException(path + ": " + set);
-        }
-    }
-
-    @Override
     protected List<BoxItem.Info> getDirectoryEntries(BoxItem.Info dirEntry, Path dir) throws IOException {
 Debug.println(Level.FINE, dirEntry.getName());
-    	Iterable<BoxItem.Info> i = asFolder(dirEntry).getResource().getChildren("name", "size", "created_at", "modified_at", "permissions");
+        Iterable<BoxItem.Info> i = asFolder(dirEntry).getResource().getChildren("name", "size", "created_at", "modified_at", "permissions");
         return StreamSupport.stream(i.spliterator(), false).collect(Collectors.toList()); 
     }
 
     @Override
+    protected BoxItem.Info createDirectoryEntry(BoxItem.Info parentEntry, Path dir) throws IOException {
+        return asFolder(parentEntry).getResource().createFolder(toFilenameString(dir));
+    }
+
+    @Override
     protected boolean hasChildren(BoxItem.Info dirEntry, Path dir) throws IOException {
-    	return getDirectoryEntries(dir, false).size() > 0;
+        return getDirectoryEntries(dir, false).size() > 0;
     }
 
     @Override
@@ -228,11 +162,44 @@ Debug.println(Level.FINE, dirEntry.getName());
     protected BoxItem.Info moveFolderEntry(BoxItem.Info sourceEntry, BoxItem.Info targetParentEntry, Path source, Path target, boolean targetIsParent) throws IOException {
         BoxItem.Info patchedEntry = asFolder(sourceEntry).getResource().move(asFolder(targetParentEntry).getResource(), toFilenameString(target));
 Debug.println(patchedEntry.getID() + ", " + patchedEntry.getParent().getName() + "/" + patchedEntry.getName());
-		return patchedEntry;
+        return patchedEntry;
     }
 
     @Override
     protected BoxItem.Info renameEntry(BoxItem.Info sourceEntry, BoxItem.Info targetParentEntry, Path source, Path target) throws IOException {
-    	return asFile(sourceEntry).getResource().move(asFolder(targetParentEntry).getResource(), toFilenameString(target));
+        return asFile(sourceEntry).getResource().move(asFolder(targetParentEntry).getResource(), toFilenameString(target));
+    }
+
+    @Override
+    protected void checkAccessEntry(BoxItem.Info entry, Path path, AccessMode... modes) throws IOException {
+
+        final Set<AccessMode> set = EnumSet.noneOf(AccessMode.class);
+
+        EnumSet<BoxFile.Permission> permissions = asFile(entry).getPermissions();
+        if (permissions != null) {
+            for (AccessMode mode : modes) {
+                switch (mode) {
+                case READ:
+                    if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
+                        set.add(AccessMode.READ);
+                    }
+                    break;
+                case WRITE:
+                    if (!permissions.contains(BoxFile.Permission.CAN_UPLOAD)) {
+                        set.add(AccessMode.WRITE);
+                    }
+                    break;
+                case EXECUTE:
+                    if (!permissions.contains(BoxFile.Permission.CAN_DOWNLOAD)) {
+                        set.add(AccessMode.EXECUTE);
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (set.size() > 0) {
+            throw new AccessDeniedException(path + ": " + set);
+        }
     }
 }
