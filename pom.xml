@@ -61,6 +61,7 @@
                 <TEST_CLIENT_ID>${test.client_id}</TEST_CLIENT_ID>
                 <TEST_CLIENT_SECRET>${test.client_secret}</TEST_CLIENT_SECRET>
                 <TEST_REDIRECT_URL>${test.redirect_url}</TEST_REDIRECT_URL>
+                <TEST_SCOPES>${test.scopes}</TEST_SCOPES>
                 <BOX_DEVELOPER_TOKEN>${box.developer_token}</BOX_DEVELOPER_TOKEN>
               </environmentVariables>
               <argLine>
@@ -86,7 +87,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
-            <version>2.22.2</version>
+            <version>3.0.0-M5</version>
             <configuration>
               <argLine>-Djava.util.logging.config.file=${project.build.testOutputDirectory}/logging.properties</argLine>
               <trimStackTrace>false</trimStackTrace>
@@ -144,9 +145,9 @@
     </dependency>
 
     <dependency>
-      <groupId>com.github.umjammer.vavi-net-auth</groupId>
+      <groupId>vavi</groupId> <!-- com.github.umjammer.vavi-net-auth -->
       <artifactId>vavi-net-auth-box</artifactId>
-      <version>0.1.3</version>
+      <version>0.1.4-SNAPSHOT</version>
     </dependency>
 
     <dependency>
