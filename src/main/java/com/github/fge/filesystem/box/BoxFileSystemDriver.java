@@ -12,9 +12,12 @@ import java.nio.file.CopyOption;
 import java.nio.file.FileStore;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchService;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Level;
@@ -35,7 +38,9 @@ import com.github.fge.filesystem.provider.FileSystemFactoryProvider;
 import vavi.nio.file.Util;
 import vavi.util.Debug;
 
-import static vavi.nio.file.Util.toFilenameString;
+import static com.github.fge.filesystem.box.BoxFileSystemProvider.ENV_USE_SYSTEM_WATCHER;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
+import static vavi.nio.file.Util.toFilenameString;;
 
 
 /**
@@ -47,17 +52,59 @@ import static vavi.nio.file.Util.toFilenameString;
 public final class BoxFileSystemDriver
     extends CachedFileSystemDriver<BoxItem.Info> {
 
+    private BoxWatchService systemWatcher;
     private BoxFolder.Info rootInfo;
 
     public BoxFileSystemDriver(final FileStore fileStore,
         FileSystemFactoryProvider factoryProvider,
         BoxFolder.Info rootInfo,
-        Map<String, ?> env) {
+        Map<String, ?> env) throws IOException {
 
         super(fileStore, factoryProvider);
         this.rootInfo = Objects.requireNonNull(rootInfo);
         setEnv(env);
+
+        @SuppressWarnings("unchecked")
+        boolean useSystemWatcher = (Boolean) ((Map<String, Object>) env).getOrDefault(ENV_USE_SYSTEM_WATCHER, false);
+        if (useSystemWatcher) {
+            systemWatcher = new BoxWatchService(rootInfo);
+            systemWatcher.setNotificationListener(this::processNotification);
+        }
     }
+
+    /** for system watcher */
+    private void processNotification(String id, Kind<?> kind) {
+        if (ENTRY_DELETE == kind) {
+            try {
+                Path path = cache.getEntry(e -> id.equals(e.getID()));
+                cache.removeEntry(path);
+            } catch (NoSuchElementException e) {
+Debug.println("NOTIFICATION: already deleted: " + id);
+            }
+        } else {
+            try {
+                try {
+                    Path path = cache.getEntry(e -> id.equals(e.getID()));
+Debug.println("NOTIFICATION: maybe updated: " + path);
+                    cache.removeEntry(path);
+                    cache.getEntry(path);
+                } catch (NoSuchElementException e) {
+// TODO impl
+//                    BoxItem.Info entry = BoxFile.client.files().getMetadata(pathString);
+//                    Path path = parent.resolve(pathString);
+//Debug.println("NOTIFICATION: maybe created: " + path);
+//                    cache.addEntry(path, entry);
+                }
+            } catch (NoSuchElementException e) {
+Debug.println("NOTIFICATION: parent not found: " + e);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /** */
+    private static final String[] ENTRY_FIELDS = { "name", "size", "created_at", "modified_at", "permissions" };
 
     private static BoxFolder.Info asFolder(BoxItem.Info entry) {
         return BoxFolder.Info.class.cast(entry);
@@ -121,7 +168,7 @@ public final class BoxFileSystemDriver
     @Override
     protected List<BoxItem.Info> getDirectoryEntries(BoxItem.Info dirEntry, Path dir) throws IOException {
 Debug.println(Level.FINE, dirEntry.getName());
-        Iterable<BoxItem.Info> i = asFolder(dirEntry).getResource().getChildren("name", "size", "created_at", "modified_at", "permissions");
+        Iterable<BoxItem.Info> i = asFolder(dirEntry).getResource().getChildren(ENTRY_FIELDS);
         return StreamSupport.stream(i.spliterator(), false).collect(Collectors.toList()); 
     }
 
@@ -200,6 +247,15 @@ Debug.println(patchedEntry.getID() + ", " + patchedEntry.getParent().getName() +
 
         if (set.size() > 0) {
             throw new AccessDeniedException(path + ": " + set);
+        }
+    }
+
+    @Override
+    public WatchService newWatchService() {
+        try {
+            return new BoxWatchService(rootInfo);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
         }
     }
 }
