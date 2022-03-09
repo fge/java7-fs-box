@@ -5,7 +5,7 @@
 
   <groupId>com.github.fge</groupId>
   <artifactId>java7-fs-box</artifactId>
-  <version>0.1.12v</version>
+  <version>0.1.13v</version>
 
   <name>java7-fs-box</name>
   <scm>
@@ -145,9 +145,9 @@
     </dependency>
 
     <dependency>
-      <groupId>vavi</groupId> <!-- com.github.umjammer.vavi-net-auth -->
+      <groupId>com.github.umjammer.vavi-net-auth</groupId>
       <artifactId>vavi-net-auth-box</artifactId>
-      <version>0.1.4-SNAPSHOT</version>
+      <version>0.1.4</version>
     </dependency>
 
     <dependency>
