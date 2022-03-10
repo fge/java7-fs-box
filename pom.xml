@@ -151,9 +151,9 @@
     </dependency>
 
     <dependency>
-      <groupId>vavi</groupId>
+      <groupId>com.github.umjammer.vavi-apps-fuse</groupId>
       <artifactId>vavi-nio-file-commons</artifactId>
-      <version>0.1.7-SNAPSHOT</version>
+      <version>0.1.7</version>
     </dependency>
 
     <dependency>
